@@ -1,0 +1,101 @@
+# =============================================================================
+# docker-compose.yml
+# =============================================================================
+# O QUE FAZ:
+#   Define os serviços de infraestrutura necessários para rodar o projeto
+#   localmente: o banco PostgreSQL e, futuramente, um servidor de cache (Redis).
+#
+# POR QUE DOCKER?
+#   Docker garante que o ambiente de desenvolvimento seja idêntico em qualquer
+#   máquina. Não precisamos instalar o PostgreSQL diretamente no sistema
+#   operacional, evitando conflitos de versão.
+#
+# COMO ISSO AJUDA NO REAPROVEITAMENTO?
+#   Qualquer desenvolvedor que entrar no projeto só precisa rodar
+#   `docker-compose up -d` e terá o ambiente funcionando em segundos.
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # SERVIÇO: postgres
+  # ---------------------------------------------------------------------------
+  # O coração do nosso sistema multitenant.
+  # Usamos a versão 15 do PostgreSQL pois ela suporta todos os recursos que
+  # precisamos, especialmente o controle fino de 'search_path' por sessão,
+  # que é a base da nossa arquitetura Schema-per-Tenant.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    # Usamos a versão 'alpine' (baseada em Linux Alpine) por ser muito mais
+    # leve que a imagem padrão, reduzindo o tempo de download e o uso de disco.
+
+    container_name: saas_multitenant_db
+
+    restart: unless-stopped
+    # 'unless-stopped' garante que o container suba automaticamente se a
+    # máquina reiniciar, mas não reinicia se você parar manualmente.
+
+    environment:
+      # As credenciais são lidas do arquivo .env para não ficarem expostas
+      # diretamente neste arquivo. NUNCA commite senhas em arquivos de código.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      # Mapeia a porta do container para a porta da sua máquina local.
+      # Formato: "PORTA_LOCAL:PORTA_CONTAINER"
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    volumes:
+      # MUITO IMPORTANTE: este volume garante que os dados do banco
+      # persistam mesmo que o container seja destruído e recriado.
+      # Sem isso, você perderia todos os dados a cada `docker-compose down`.
+      - postgres_data:/var/lib/postgresql/data
+
+      # Este diretório de scripts de inicialização é executado automaticamente
+      # pelo PostgreSQL na PRIMEIRA vez que o container sobe (quando o volume
+      # está vazio). Usaremos para criar as extensões necessárias.
+      - ./docker/postgres/init-scripts:/docker-entrypoint-initdb.d
+
+    healthcheck:
+      # O healthcheck permite que outros serviços (como a nossa API) esperem
+      # o banco estar REALMENTE pronto antes de tentar se conectar.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # SERVIÇO: pgadmin (OPCIONAL — apenas para desenvolvimento)
+  # ---------------------------------------------------------------------------
+  # Interface gráfica para visualizar e gerenciar o banco de dados.
+  # Extremamente útil para visualizar os schemas de cada tenant criados
+  # dinamicamente pela nossa aplicação.
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: saas_multitenant_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        # 'depends_on' com 'condition: service_healthy' garante que o pgAdmin
+        # só sobe DEPOIS que o PostgreSQL passou no healthcheck.
+
+# =============================================================================
+# VOLUMES NOMEADOS
+# =============================================================================
+# Volumes nomeados são gerenciados pelo Docker e persistem independentemente
+# do ciclo de vida dos containers, garantindo que seus dados não se percam.
+# =============================================================================
+volumes:
+  postgres_data:
+    name: saas_multitenant_postgres_data

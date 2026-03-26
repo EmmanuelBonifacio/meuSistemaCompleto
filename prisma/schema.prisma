@@ -1,0 +1,192 @@
+// =============================================================================
+// schema.prisma
+// =============================================================================
+// O QUE FAZ:
+//   Define toda a estrutura do banco de dados usando a linguagem do Prisma.
+//   Este arquivo é a "fonte da verdade" do nosso modelo de dados.
+//
+// POR QUE PRISMA?
+//   O Prisma oferece type-safety completo (TypeScript), auto-complete no
+//   editor, e migrations versionadas. Isso evita erros humanos ao escrever
+//   SQL manualmente e torna o código mais legível e manutenível.
+//
+// ARQUITETURA DE SCHEMAS:
+//   Nosso banco terá DOIS tipos de schemas:
+//
+//   1. SCHEMA PUBLIC (padrão do Postgres):
+//      Contém os dados GLOBAIS do sistema:
+//      - Tabela 'tenants': lista de todos os clientes cadastrados
+//      - Tabela 'tenant_modules': quais módulos estão ativos por cliente
+//      - Tabela 'global_users': usuários com acesso ao painel admin
+//
+//   2. SCHEMAS POR TENANT (ex: tenant_acme, tenant_foobar):
+//      Criados DINAMICAMENTE quando um novo cliente é provisionado.
+//      Contêm as tabelas dos módulos (produtos, transações, etc).
+//      O Prisma NÃO gerencia diretamente esses schemas — eles são criados
+//      via SQL raw durante o provisionamento do tenant (explicado no /src/core).
+//
+// NOTA IMPORTANTE SOBRE O PRISMA E SCHEMAS:
+//   O Prisma foi projetado para um único schema por vez. Para lidar com
+//   múltiplos schemas de tenant, usamos a estratégia de:
+//   1. Definir as migrations das tabelas dos tenants separadamente (SQL puro)
+//   2. Usar 'db.executeRaw' para setar o 'search_path' por requisição
+//   Isso será explicado em detalhes no arquivo /src/core/database/prisma.ts
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  // 'previewFeatures' não necessário para nossa abordagem
+}
+
+datasource db {
+  provider = "postgresql"
+  // A URL de conexão vem do arquivo .env, nunca hardcoded aqui.
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// MODELO: Tenant
+// =============================================================================
+// Representa um cliente (empresa) que usa nosso sistema SaaS.
+// Esta tabela fica no schema 'public' e é a raiz de toda a arquitetura.
+//
+// POR QUE TER UM 'slug'?
+//   O slug é o identificador único que usamos para formar o nome do schema
+//   no PostgreSQL. Ex: tenant com slug "acme-corp" terá o schema "tenant_acme_corp".
+//   Usamos slug em vez do id numérico para deixar o schema legível no banco.
+//
+// POR QUE 'isActive'?
+//   Permite suspender um tenant sem deletar seus dados. Fundamental em SaaS
+//   para casos de inadimplência ou suspensão temporária da conta.
+// =============================================================================
+model Tenant {
+  id        String   @id @default(uuid())
+  // UUID como ID primário evita ataques de enumeração (IDs sequenciais
+  // como 1, 2, 3 permitiriam adivinhar outros tenants)
+
+  name      String
+  // Nome legível da empresa. Ex: "Acme Corporation"
+
+  slug      String   @unique
+  // Identificador único em formato URL-friendly. Ex: "acme-corp"
+  // Usado para nomear o schema: "tenant_acme_corp"
+  // O @unique garante que dois tenants nunca terão o mesmo schema.
+
+  schemaName String  @unique @map("schema_name")
+  // Nome EXATO do schema criado no PostgreSQL para este tenant.
+  // Ex: "tenant_acme_corp"
+  // Armazenamos aqui para não precisar recalcular a cada requisição.
+
+  isActive  Boolean  @default(true) @map("is_active")
+  // Controla se o tenant está ativo. Tenants inativos têm acesso bloqueado.
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relacionamento: um tenant pode ter vários módulos ativados
+  modules   TenantModule[]
+
+  @@map("tenants")
+  // @@map define o nome real da tabela no banco. Seguimos snake_case no banco
+  // e camelCase no código TypeScript — o Prisma faz o mapeamento automaticamente.
+}
+
+// =============================================================================
+// MODELO: Module
+// =============================================================================
+// Catálogo central de todos os módulos disponíveis no sistema.
+// Esta tabela é populada pelo seed do sistema (dados fixos que não mudam).
+//
+// POR QUE TER UMA TABELA DE MÓDULOS?
+//   Centralizar os módulos disponíveis permite que o sistema seja extensível.
+//   Para adicionar um novo módulo ao sistema, basta inserir uma linha aqui
+//   e criar a pasta correspondente em /src/modules/. Nenhum código precisa
+//   ser alterado nas rotas ou middlewares existentes.
+// =============================================================================
+model Module {
+  id          String   @id @default(uuid())
+
+  name        String   @unique
+  // Nome do módulo como código. Ex: "estoque", "financeiro"
+  // Este nome é usado pelo middleware para verificar a ativação.
+
+  displayName String   @map("display_name")
+  // Nome para exibição ao usuário. Ex: "Gestão de Estoque"
+
+  description String?
+  // Descrição opcional do módulo para o painel admin.
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relacionamento: um módulo pode estar ativo em vários tenants
+  tenants     TenantModule[]
+
+  @@map("modules")
+}
+
+// =============================================================================
+// MODELO: TenantModule (Tabela de Junção)
+// =============================================================================
+// Controla QUAIS módulos estão ativos para QUAL tenant.
+// Esta é a peça central da lógica de ativação de módulos.
+//
+// COMO FUNCIONA:
+//   É uma tabela Many-to-Many entre Tenant e Module.
+//   Ex: Tenant "Acme" tem os módulos "estoque" e "financeiro" ativos.
+//       Tenant "Foobar" tem apenas "estoque" ativo.
+//
+// POR QUE 'isEnabled' em vez de simplesmente deletar o registro?
+//   Manter o registro e apenas mudar 'isEnabled' para false preserva o
+//   histórico de quando o módulo foi ativado e desativado, facilitando
+//   auditorias e relatórios de uso.
+// =============================================================================
+model TenantModule {
+  id        String   @id @default(uuid())
+
+  tenantId  String   @map("tenant_id")
+  moduleId  String   @map("module_id")
+
+  isEnabled Boolean  @default(true) @map("is_enabled")
+  // true = módulo ativo para este tenant, false = módulo desativado
+
+  enabledAt  DateTime @default(now()) @map("enabled_at")
+  // Quando o módulo foi ativado pela primeira vez para este tenant.
+
+  // Relacionamentos
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module    Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, moduleId])
+  // Garante que um mesmo módulo não seja adicionado duas vezes ao mesmo tenant.
+
+  @@map("tenant_modules")
+}
+
+// =============================================================================
+// MODELO: AdminUser
+// =============================================================================
+// Usuários com acesso ao painel de administração GLOBAL (/src/admin).
+// Estes usuários NÃO são clientes — são os operadores/donos do SaaS.
+//
+// POR QUE SEPARAR DE USUÁRIOS DE TENANT?
+//   Usuários de tenant existem dentro do schema de cada tenant (isolados).
+//   AdminUsers existem no schema public e têm visão CROSS-TENANT.
+//   Esta separação é uma medida de segurança: um usuário de tenant jamais
+//   poderá acessar dados de outro tenant ou funções administrativas.
+// =============================================================================
+model AdminUser {
+  id           String   @id @default(uuid())
+
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  // NUNCA armazenamos senhas em texto puro. Apenas o hash (bcrypt).
+
+  name         String
+  role         String   @default("admin")
+  // Reservado para futuras expansões de permissões (ex: "superadmin", "support")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_users")
+}
