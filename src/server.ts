@@ -14,6 +14,7 @@
 
 import Fastify from "fastify";
 import fastifyJwt from "@fastify/jwt";
+import fastifyCors from "@fastify/cors";
 import { disconnectPrisma } from "./core/database/prisma";
 import { tenantMiddleware } from "./core/middleware/tenant.middleware";
 import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
@@ -73,6 +74,20 @@ async function buildServer() {
 
   await app.register(fastifyJwt, {
     secret: jwtSecret,
+  });
+
+  // ---------------------------------------------------------------------------
+  // PLUGIN: CORS
+  // ---------------------------------------------------------------------------
+  // Permite que o frontend (localhost:3001) faça requisições ao backend.
+  // Em produção, substitua origin pelo domínio real do frontend.
+  // ---------------------------------------------------------------------------
+  await app.register(fastifyCors, {
+    origin:
+      process.env.NODE_ENV === "production"
+        ? (process.env.FRONTEND_URL ?? false)
+        : true, // Em dev aceita qualquer origem
+    credentials: true,
   });
 
   // ==========================================================================
