@@ -19,6 +19,7 @@ import { tenantMiddleware } from "./core/middleware/tenant.middleware";
 import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
 import { estoqueRoutes } from "./modules/estoque/estoque.routes";
 import { financeiroRoutes } from "./modules/financeiro/financeiro.routes";
+import { adminRoutes } from "./admin/admin.routes";
 
 // =============================================================================
 // FUNÇÃO: buildServer
@@ -184,6 +185,20 @@ async function buildServer() {
   await app.register(financeiroRoutes, { prefix: "/financeiro" });
 
   // ==========================================================================
+  // PAINEL ADMIN (rotas protegidas por role: "ADMIN")
+  // ==========================================================================
+  // O QUE FAZ:
+  //   Registra o painel de administração em /admin/*.
+  //   O adminMiddleware (aplicado via addHook dentro do plugin) garante que
+  //   APENAS usuários com role: "ADMIN" no JWT podem acessar essas rotas.
+  //
+  // COMO GERAR UM TOKEN ADMIN PARA TESTES:
+  //   POST /dev/token com body: { "tenantId": "qualquer-uuid", "userId": "admin-001", "role": "ADMIN" }
+  //   Note: o tenantId é ignorado pelo adminMiddleware, mas o campo é exigido pelo schema.
+  // ==========================================================================
+  await app.register(adminRoutes, { prefix: "/admin" });
+
+  // ==========================================================================
   // ROTA DE PROVISIONAMENTO DE TENANT (apenas DEV — em produção = /admin)
   // ==========================================================================
   if (process.env.NODE_ENV === "development") {
@@ -266,10 +281,32 @@ async function start() {
     console.log(
       `   DELETE /financeiro/transacoes/:id      → Deletar transação`,
     );
+    console.log(`\n   --- PAINEL ADMIN (role: ADMIN) ---`);
+    console.log(
+      `   GET    /admin/stats                     → Dashboard do sistema`,
+    );
+    console.log(
+      `   GET    /admin/tenants                   → Listar todos os tenants`,
+    );
+    console.log(
+      `   GET    /admin/tenants/:id               → Detalhes de um tenant`,
+    );
+    console.log(
+      `   POST   /admin/tenants                   → Criar + provisionar tenant`,
+    );
+    console.log(
+      `   PATCH  /admin/tenants/:id/suspend       → Suspender tenant`,
+    );
+    console.log(`   PATCH  /admin/tenants/:id/reactivate    → Reativar tenant`);
+    console.log(
+      `   PATCH  /admin/tenants/:id/modules       → Ligar/desligar módulo`,
+    );
     if (process.env.NODE_ENV === "development") {
       console.log(`\n   --- ROTAS DE DEV ---`);
       console.log(`   POST /dev/token                → Gerar JWT de teste`);
-      console.log(`   POST /dev/provisionar-tenant   → Criar novo tenant`);
+      console.log(
+        `   POST /dev/provisionar-tenant   → Criar novo tenant (atalho DEV)`,
+      );
     }
   } catch (error) {
     app.log.error(error);
