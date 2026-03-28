@@ -1,0 +1,105 @@
+// =============================================================================
+// src/modules/tv/tv.routes.ts
+// =============================================================================
+// O QUE FAZ:
+//   Registra as rotas do módulo de Controle de Telas como um plugin Fastify.
+//   Conecta cada URL ao seu handler no controller.
+//
+// PROTEÇÃO EM DUAS CAMADAS (preHandler array):
+//   1. tenantMiddleware  → Quem você é? (autenticação + carrega request.tenant)
+//   2. requireModule('tv') → Você tem acesso a este módulo? (autorização por module)
+//
+// ROTAS REGISTRADAS (todas com prefixo /tv via server.ts):
+//   GET    /tv/devices         → listar todas as TVs do tenant
+//   GET    /tv/devices/:id     → detalhe de uma TV
+//   POST   /tv/devices         → registrar nova TV (limite: 5 por tenant)
+//   PATCH  /tv/devices/:id     → atualizar dados de uma TV
+//   DELETE /tv/devices/:id     → remover TV (libera slot)
+//   POST   /tv/control         → enviar conteúdo/URL para uma TV (UPnP/DIAL)
+//   GET    /tv/discover        → varredura SSDP na rede local
+// =============================================================================
+
+import { FastifyInstance } from "fastify";
+import { tenantMiddleware } from "../../core/middleware/tenant.middleware";
+import { requireModule } from "../../core/middleware/module.middleware";
+import {
+  listDevices,
+  getDevice,
+  registerDevice,
+  updateDevice,
+  removeDevice,
+  controlTv,
+  discoverDevices,
+} from "./tv.controller";
+
+// Middleware de acesso ao módulo TV (reutilizável como preHandler)
+// requireModule('tv') retorna uma função que verifica se o tenant tem
+// o módulo 'tv' ativo no cadastro do painel admin.
+const requireTvModule = requireModule("tv");
+
+export async function tvRoutes(fastify: FastifyInstance) {
+  // Prehandler padrão para TODAS as rotas deste plugin
+  const guards = [tenantMiddleware, requireTvModule];
+
+  // --------------------------------------------------------------------------
+  // GET /tv/devices
+  // --------------------------------------------------------------------------
+  // Lista todos os dispositivos TV cadastrados pelo tenant.
+  // Resposta inclui: dados dos devices + total + slots disponíveis.
+  // --------------------------------------------------------------------------
+  fastify.get("/devices", { preHandler: guards }, listDevices);
+
+  // --------------------------------------------------------------------------
+  // GET /tv/devices/:id
+  // --------------------------------------------------------------------------
+  // Retorna detalhes de um único dispositivo, incluindo o current_content
+  // (última URL enviada para a tela — útil para polling de apps na TV).
+  // --------------------------------------------------------------------------
+  fastify.get("/devices/:id", { preHandler: guards }, getDevice);
+
+  // --------------------------------------------------------------------------
+  // POST /tv/devices
+  // --------------------------------------------------------------------------
+  // Registra uma nova TV. Verifica limite de 5 TVs por tenant.
+  // Body: { name, ip_address, mac_address? }
+  // --------------------------------------------------------------------------
+  fastify.post("/devices", { preHandler: guards }, registerDevice);
+
+  // --------------------------------------------------------------------------
+  // PATCH /tv/devices/:id
+  // --------------------------------------------------------------------------
+  // Atualiza campos de uma TV (name, ip_address, mac_address).
+  // Todos os campos são opcionais (semântica PATCH).
+  // --------------------------------------------------------------------------
+  fastify.patch("/devices/:id", { preHandler: guards }, updateDevice);
+
+  // --------------------------------------------------------------------------
+  // DELETE /tv/devices/:id
+  // --------------------------------------------------------------------------
+  // Remove uma TV permanentemente, liberando um slot no limite de 5.
+  // --------------------------------------------------------------------------
+  fastify.delete("/devices/:id", { preHandler: guards }, removeDevice);
+
+  // --------------------------------------------------------------------------
+  // POST /tv/control
+  // --------------------------------------------------------------------------
+  // Envia conteúdo (URL) para uma TV via UPnP ou DIAL.
+  // Body: { deviceId, contentUrl, contentType, upnpPort?, dialPort? }
+  //
+  // contentType:
+  //   'video' | 'image' → UPnP AVTransport (SetAVTransportURI + Play)
+  //   'web'             → DIAL (POST /apps/Browser com url=...)
+  // --------------------------------------------------------------------------
+  fastify.post("/control", { preHandler: guards }, controlTv);
+
+  // --------------------------------------------------------------------------
+  // GET /tv/discover
+  // --------------------------------------------------------------------------
+  // Varre a rede local com SSDP para encontrar Smart TVs e dispositivos UPnP.
+  // Query params: ?timeout=5 (segundos, máximo 30)
+  //
+  // NOTA: Esta rota faz varredura UDP na rede — pode ser lenta dependendo
+  // do ambiente. Em produção, considere limitar a frequência de chamadas.
+  // --------------------------------------------------------------------------
+  fastify.get("/discover", { preHandler: guards }, discoverDevices);
+}

@@ -20,6 +20,7 @@ import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
 import { estoqueRoutes } from "./modules/estoque/estoque.routes";
 import { financeiroRoutes } from "./modules/financeiro/financeiro.routes";
 import { adminRoutes } from "./admin/admin.routes";
+import { tvRoutes } from "./modules/tv/tv.routes";
 
 // =============================================================================
 // FUNÇÃO: buildServer
@@ -184,6 +185,9 @@ async function buildServer() {
   // Módulo Financeiro
   await app.register(financeiroRoutes, { prefix: "/financeiro" });
 
+  // Módulo de Controle de Telas (Digital Signage)
+  await app.register(tvRoutes, { prefix: "/tv" });
+
   // ==========================================================================
   // PAINEL ADMIN (rotas protegidas por role: "ADMIN")
   // ==========================================================================
@@ -301,6 +305,18 @@ async function start() {
     console.log(
       `   PATCH  /admin/tenants/:id/modules       → Ligar/desligar módulo`,
     );
+    console.log(`\n   --- MÓDULO: TV / DIGITAL SIGNAGE ---`);
+    console.log(`   GET    /tv/devices              → Listar TVs do tenant`);
+    console.log(`   GET    /tv/devices/:id          → Detalhes de uma TV`);
+    console.log(
+      `   POST   /tv/devices              → Registrar TV (máx 5/tenant)`,
+    );
+    console.log(`   PATCH  /tv/devices/:id          → Atualizar TV`);
+    console.log(`   DELETE /tv/devices/:id          → Remover TV`);
+    console.log(
+      `   POST   /tv/control              → Enviar conteúdo via UPnP/DIAL`,
+    );
+    console.log(`   GET    /tv/discover             → Varredura SSDP na rede`);
     if (process.env.NODE_ENV === "development") {
       console.log(`\n   --- ROTAS DE DEV ---`);
       console.log(`   POST /dev/token                → Gerar JWT de teste`);

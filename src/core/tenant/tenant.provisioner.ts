@@ -109,6 +109,48 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // Índice para busca por período (relatórios mensais/anuais)
     `CREATE INDEX IF NOT EXISTS idx_transactions_date
       ON "${schemaName}".transactions (transaction_date DESC)`,
+
+    // -----------------------------------------------------------------
+    // TABELA: tv_devices (Módulo de Controle de Telas / Digital Signage)
+    // -----------------------------------------------------------------
+    // Armazena os dispositivos (Smart TVs, monitores) registrados pelo
+    // tenant. Cada tenant tem seu próprio inventário de telas, isolado
+    // dentro do seu schema.
+    //
+    // REGRA DE NEGÓCIO IMPORTANTE:
+    //   Máximo de 5 dispositivos por tenant. Esta regra NÃO é enforçada
+    //   por constraint no banco (para dar mensagem de erro amigável).
+    //   É enforçada no tv.repository.ts antes do INSERT.
+    //
+    // CAMPOS:
+    //   ip_address    → IPv4 ou IPv6 da TV na rede local (deve ser único
+    //                   por tenant, pois dois dispositivos não podem ter
+    //                   o mesmo IP na mesma rede)
+    //   mac_address   → Endereço físico da placa de rede (para Wake-on-LAN)
+    //   status        → 'online' (respondendo a pings) | 'offline' (sem resposta)
+    //   current_content → última URL que foi enviada para a tela
+    //   last_seen_at  → timestamp da última resposta bem-sucedida ao enviar
+    //                   um comando (atualizado automaticamente em POST /tv/control)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".tv_devices (
+      id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      name            VARCHAR(100) NOT NULL,
+      ip_address      VARCHAR(45)  NOT NULL,
+      mac_address     VARCHAR(17),
+      status          VARCHAR(20)  NOT NULL DEFAULT 'offline'
+                      CONSTRAINT tv_devices_status_check
+                      CHECK (status IN ('online', 'offline')),
+      current_content TEXT,
+      last_seen_at    TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      -- IP único por tenant: dois devices não podem ter o mesmo IP no schema
+      CONSTRAINT tv_devices_ip_unique UNIQUE (ip_address)
+    )`,
+
+    // Índice para buscar rapidamente dispositivos online (uso frequente no dashboard)
+    `CREATE INDEX IF NOT EXISTS idx_tv_devices_status
+      ON "${schemaName}".tv_devices (status)`,
   ];
 }
 

@@ -55,6 +55,12 @@ async function main() {
       description:
         "Gestão de funcionários, folha de pagamento e ponto eletrônico.",
     },
+    {
+      name: "tv",
+      displayName: "Controle de Telas",
+      description:
+        "Digital Signage: gerenciar Smart TVs e monitores da rede, enviar conteúdo via UPnP/DIAL.",
+    },
   ];
 
   console.log("📦 Criando módulos do catálogo...");
