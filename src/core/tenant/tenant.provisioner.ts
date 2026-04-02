@@ -151,6 +151,91 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // Índice para buscar rapidamente dispositivos online (uso frequente no dashboard)
     `CREATE INDEX IF NOT EXISTS idx_tv_devices_status
       ON "${schemaName}".tv_devices (status)`,
+
+    // -----------------------------------------------------------------
+    // TABELA: users (Módulo de Autenticação)
+    // -----------------------------------------------------------------
+    // Armazena os usuários que fazem login no sistema para este tenant.
+    // Cada tenant tem sua própria tabela de usuários, completamente
+    // isolada dos outros tenants (schema-per-tenant).
+    //
+    // CAMPOS:
+    //   email         → identificador de login (único por tenant)
+    //   password_hash → NUNCA guardar senha em texto puro. Aqui fica
+    //                   o hash bcrypt (custo 12) da senha do usuário.
+    //   name          → nome exibido na interface
+    //   role          → papel do usuário dentro do tenant:
+    //                   'admin_tenant' = administrador do tenant
+    //                   'user'         = usuário comum
+    //   is_active     → permite desativar um usuário sem deletar seus dados
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".users (
+      id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      email         VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      name          VARCHAR(100),
+      role          VARCHAR(50)  NOT NULL DEFAULT 'user',
+      is_active     BOOLEAN      NOT NULL DEFAULT true,
+      created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      CONSTRAINT users_email_unique UNIQUE (email)
+    )`,
+
+    // Índice para login rápido por email (operação mais frequente)
+    `CREATE INDEX IF NOT EXISTS idx_users_email
+      ON "${schemaName}".users (email)`,
+
+    // Índice para filtrar apenas usuários ativos
+    `CREATE INDEX IF NOT EXISTS idx_users_active
+      ON "${schemaName}".users (is_active)
+      WHERE is_active = true`,
+
+    // -----------------------------------------------------------------
+    // TABELA: refresh_tokens (Módulo de Autenticação — Abordagem Híbrida)
+    // -----------------------------------------------------------------
+    // Armazena os refresh tokens da abordagem híbrida de autenticação.
+    //
+    // POR QUE GUARDAR O HASH E NÃO O TOKEN ORIGINAL?
+    //   O refresh_token em si é uma string longa e aleatória enviada ao
+    //   cliente. Se o banco for comprometido, o atacante NÃO consegue
+    //   usar os tokens (apenas os hashes). Mesmo princípio do bcrypt
+    //   para senhas, porém aqui usamos SHA-256 (mais rápido, token já
+    //   é aleatório e longo o suficiente — não precisa de salt).
+    //
+    // ROTAÇÃO DE TOKENS (segurança extra):
+    //   A cada /auth/refresh, o token antigo é revogado e um novo par
+    //   é emitido. Se um token antigo for usado novamente, identificamos
+    //   possível roubo e podemos revogar TODA a família de tokens.
+    //
+    // CAMPOS:
+    //   token_hash    → SHA-256 do refresh token (não o token em si)
+    //   expires_at    → timestamp de expiração (geralmente 30 dias)
+    //   is_revoked    → true se o token foi usado (rotação) ou invalidado (logout)
+    //   ip_address    → IP da requisição de login (auditoria)
+    //   user_agent    → browser/app usado no login (auditoria)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".refresh_tokens (
+      id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id     UUID         NOT NULL,
+      token_hash  VARCHAR(64)  NOT NULL,
+      expires_at  TIMESTAMPTZ  NOT NULL,
+      is_revoked  BOOLEAN      NOT NULL DEFAULT false,
+      ip_address  VARCHAR(45),
+      user_agent  TEXT,
+      created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      CONSTRAINT refresh_tokens_token_hash_unique UNIQUE (token_hash),
+      CONSTRAINT refresh_tokens_user_fk
+        FOREIGN KEY (user_id) REFERENCES "${schemaName}".users(id)
+        ON DELETE CASCADE
+    )`,
+
+    // Índice para busca rápida por hash (operação em todo /auth/refresh)
+    `CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash
+      ON "${schemaName}".refresh_tokens (token_hash)`,
+
+    // Índice para limpeza periódica de tokens expirados / listagem por usuário
+    `CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
+      ON "${schemaName}".refresh_tokens (user_id)`,
   ];
 }
 

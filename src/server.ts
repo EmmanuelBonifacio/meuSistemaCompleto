@@ -21,7 +21,9 @@ import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
 import { estoqueRoutes } from "./modules/estoque/estoque.routes";
 import { financeiroRoutes } from "./modules/financeiro/financeiro.routes";
 import { adminRoutes } from "./admin/admin.routes";
+import { adminAuthRoutes } from "./admin/admin.auth.routes";
 import { tvRoutes } from "./modules/tv/tv.routes";
+import { authRoutes } from "./modules/auth/auth.routes";
 
 // =============================================================================
 // FUNÇÃO: buildServer
@@ -194,6 +196,9 @@ async function buildServer() {
   //   basta comentar a linha de registro aqui.
   // ==========================================================================
 
+  // Módulo de Autenticação (rotas públicas — sem tenantMiddleware)
+  await app.register(authRoutes, { prefix: "/auth" });
+
   // Módulo de Gestão de Estoque
   await app.register(estoqueRoutes, { prefix: "/estoque" });
 
@@ -204,16 +209,24 @@ async function buildServer() {
   await app.register(tvRoutes, { prefix: "/tv" });
 
   // ==========================================================================
-  // PAINEL ADMIN (rotas protegidas por role: "ADMIN")
+  // PAINEL ADMIN — LOGIN PÚBLICO (sem middleware)
+  // ==========================================================================
+  // O QUE FAZ:
+  //   Registra a rota POST /admin/login como rota pública (sem autenticação).
+  //   Plugin separado de adminRoutes para não herdar o addHook do adminMiddleware.
+  // ==========================================================================
+  await app.register(adminAuthRoutes, { prefix: "/admin" });
+
+  // ==========================================================================
+  // PAINEL ADMIN — ROTAS PROTEGIDAS (role: superadmin)
   // ==========================================================================
   // O QUE FAZ:
   //   Registra o painel de administração em /admin/*.
   //   O adminMiddleware (aplicado via addHook dentro do plugin) garante que
-  //   APENAS usuários com role: "ADMIN" no JWT podem acessar essas rotas.
+  //   APENAS usuários com role: "superadmin" no JWT podem acessar essas rotas.
   //
-  // COMO GERAR UM TOKEN ADMIN PARA TESTES:
-  //   POST /dev/token com body: { "tenantId": "qualquer-uuid", "userId": "admin-001", "role": "ADMIN" }
-  //   Note: o tenantId é ignorado pelo adminMiddleware, mas o campo é exigido pelo schema.
+  // COMO FAZER LOGIN COMO ADMIN:
+  //   POST /admin/login com { "email": "admin@sistema.com", "password": "..." }
   // ==========================================================================
   await app.register(adminRoutes, { prefix: "/admin" });
 
@@ -282,6 +295,10 @@ async function start() {
       );
     }
     console.log(`   GET  /me                  → Dados do tenant (requer JWT)`);
+    console.log(`\n   --- AUTENTICAÇÃO (rotas públicas) ---`);
+    console.log(`   POST   /auth/login             → Login com email + senha`);
+    console.log(`   POST   /auth/refresh           → Renovar tokens`);
+    console.log(`   POST   /auth/logout            → Encerrar sessão`);
     console.log(`\n   --- MÓDULO: ESTOQUE ---`);
     console.log(`   GET    /estoque/produtos          → Listar produtos`);
     console.log(`   GET    /estoque/produtos/:id      → Buscar produto`);
@@ -300,7 +317,10 @@ async function start() {
     console.log(
       `   DELETE /financeiro/transacoes/:id      → Deletar transação`,
     );
-    console.log(`\n   --- PAINEL ADMIN (role: ADMIN) ---`);
+    console.log(`\n   --- PAINEL ADMIN (role: superadmin) ---`);
+    console.log(
+      `   POST   /admin/login                     → Login do painel admin (público)`,
+    );
     console.log(
       `   GET    /admin/stats                     → Dashboard do sistema`,
     );

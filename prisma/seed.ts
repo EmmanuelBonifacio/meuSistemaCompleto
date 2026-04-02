@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { PrismaClient } from "@prisma/client";
-import { createHash } from "crypto";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
@@ -88,18 +88,20 @@ async function main() {
   // ---------------------------------------------------------------------------
   console.log("👤 Criando usuário administrador padrão...");
 
-  // NOTA PEDAGÓGICA sobre hashing de senha:
-  // Em produção, use bcrypt (ou argon2) para hash de senhas, pois são
-  // algoritmos projetados para ser LENTOS, dificultando ataques de força bruta.
-  // Aqui usamos SHA-256 apenas para o seed inicial de demonstração.
-  // O código de produção em /src/core/auth/ usará bcrypt.
-  const defaultPasswordHash = createHash("sha256")
-    .update("admin123_TROQUE_EM_PRODUCAO")
-    .digest("hex");
+  // Hash bcrypt da senha com custo 12 (padrão OWASP recomendado).
+  // O bcrypt é um algoritmo projetado para ser LENTO, dificultando ataques
+  // de força bruta. Diferente do SHA-256, o bcrypt inclui salt automático.
+  const defaultPasswordHash = await bcrypt.hash(
+    "admin123_TROQUE_EM_PRODUCAO",
+    12,
+  );
 
   await prisma.adminUser.upsert({
     where: { email: "admin@sistema.com" },
-    update: {},
+    // IMPORTANTE: atualizamos o hash sempre que o seed roda.
+    // Isso garante que se trocarmos o hash de SHA-256 para bcrypt,
+    // o banco será atualizado na próxima execução do seed.
+    update: { passwordHash: defaultPasswordHash },
     create: {
       email: "admin@sistema.com",
       passwordHash: defaultPasswordHash,

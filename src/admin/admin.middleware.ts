@@ -43,10 +43,15 @@ import { FastifyRequest, FastifyReply } from "fastify";
 // CONSTANTE: ADMIN_ROLE
 // =============================================================================
 // Centralizar o valor da role em uma constante evita erros de digitação
-// espalhados pelo código (ex: "admin" vs "ADMIN" vs "Admin").
+// espalhados pelo código (ex: "admin" vs "ADMIN" vs "superadmin").
 // Se precisarmos renomear a role, mudamos apenas aqui.
+//
+// POR QUE "superadmin" E NÃO "ADMIN"?
+//   O frontend e o backend precisam usar o mesmo valor de role.
+//   O frontend (admin/layout.tsx, admin/login/page.tsx) usa "superadmin".
+//   Alinhamos o backend para usar o mesmo valor, evitando inconsistência.
 // =============================================================================
-const ADMIN_ROLE = "ADMIN" as const;
+const ADMIN_ROLE = "superadmin" as const;
 
 // =============================================================================
 // FUNÇÃO PRINCIPAL: adminMiddleware
@@ -106,7 +111,7 @@ export async function adminMiddleware(
   //   - role: "user"          → 403 (usuário comum de um tenant)
   //   - role: "admin_tenant"  → 403 (admin de um tenant específico, não do sistema)
   //   - role ausente no token → 403
-  //   - role: "ADMIN"         → ✅ prossegue
+  //   - role: "superadmin"    → ✅ prossegue
   // ---------------------------------------------------------------------------
   const userRole = request.user?.role;
 
