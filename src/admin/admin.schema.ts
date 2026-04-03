@@ -117,3 +117,21 @@ export const AdminListTenantsQuerySchema = z.object({
 });
 
 export type AdminListTenantsQuery = z.infer<typeof AdminListTenantsQuerySchema>;
+
+// =============================================================================
+// SCHEMA: Query de logs por tenant
+// =============================================================================
+// Usado em: GET /admin/tenants/:id/logs?module=estoque&limit=50
+// =============================================================================
+export const AdminLogsQuerySchema = z.object({
+  module: z.string().optional(),
+  // Filtra por módulo específico: "estoque", "financeiro", "tv", etc.
+
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 50))
+    .pipe(z.number().min(1).max(200, "Limite máximo é 200 registros")),
+});
+
+export type AdminLogsQuery = z.infer<typeof AdminLogsQuerySchema>;

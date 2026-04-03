@@ -39,12 +39,18 @@ export interface TenantAdminView {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  // Estrutura aninhada compatível com a interface TenantModule do frontend.
+  // isActive (não isEnabled) e module: { id, name, displayName, description }
   modules: Array<{
     id: string;
-    moduleName: string;
-    displayName: string;
-    isEnabled: boolean;
-    enabledAt: Date | null;
+    moduleId: string;
+    isActive: boolean;
+    module: {
+      id: string;
+      name: string;
+      displayName: string;
+      description?: string;
+    };
   }>;
 }
 
@@ -120,10 +126,14 @@ export async function findAllTenantsAdmin(
     updatedAt: tenant.updatedAt,
     modules: tenant.modules.map((tm) => ({
       id: tm.id,
-      moduleName: tm.module.name,
-      displayName: tm.module.displayName,
-      isEnabled: tm.isEnabled,
-      enabledAt: tm.enabledAt,
+      moduleId: tm.moduleId,
+      isActive: tm.isEnabled,
+      module: {
+        id: tm.module.id,
+        name: tm.module.name,
+        displayName: tm.module.displayName,
+        description: tm.module.description ?? undefined,
+      },
     })),
   }));
 
@@ -169,10 +179,14 @@ export async function findTenantByIdAdmin(
     updatedAt: tenant.updatedAt,
     modules: tenant.modules.map((tm) => ({
       id: tm.id,
-      moduleName: tm.module.name,
-      displayName: tm.module.displayName,
-      isEnabled: tm.isEnabled,
-      enabledAt: tm.enabledAt,
+      moduleId: tm.moduleId,
+      isActive: tm.isEnabled,
+      module: {
+        id: tm.module.id,
+        name: tm.module.name,
+        displayName: tm.module.displayName,
+        description: tm.module.description ?? undefined,
+      },
     })),
   };
 }

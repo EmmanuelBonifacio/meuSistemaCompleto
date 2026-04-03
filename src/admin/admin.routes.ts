@@ -35,6 +35,7 @@ import {
   reactivateTenantHandler,
   toggleModuleHandler,
   getStatsHandler,
+  getTenantLogsHandler,
 } from "./admin.controller";
 
 // =============================================================================
@@ -127,4 +128,12 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   //   com base no estado atual vs desejado (upsert no repository).
   // ==========================================================================
   fastify.patch("/tenants/:id/modules", toggleModuleHandler);
+
+  // ==========================================================================
+  // ROTA: GET /admin/tenants/:id/logs
+  // ==========================================================================
+  // Logs de acesso do tenant: módulo, método, path, status, duração.
+  // Query params: ?module=estoque&limit=50
+  // ==========================================================================
+  fastify.get("/tenants/:id/logs", getTenantLogsHandler);
 }

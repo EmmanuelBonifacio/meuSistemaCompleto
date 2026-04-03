@@ -24,6 +24,7 @@ import { adminRoutes } from "./admin/admin.routes";
 import { adminAuthRoutes } from "./admin/admin.auth.routes";
 import { tvRoutes } from "./modules/tv/tv.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
+import { registerRequestLoggerHook } from "./core/middleware/request-logger.hook";
 
 // =============================================================================
 // FUNÇÃO: buildServer
@@ -91,6 +92,9 @@ async function buildServer() {
         : true, // Em dev aceita qualquer origem
     credentials: true,
   });
+
+  // Registra hook que grava logs de acesso por tenant/módulo na tabela request_logs
+  registerRequestLoggerHook(app);
 
   // ==========================================================================
   // ROTAS DA APLICAÇÃO

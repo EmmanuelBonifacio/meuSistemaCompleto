@@ -33,7 +33,9 @@ import {
   AdminTenantParamsSchema,
   AdminToggleModuleSchema,
   AdminListTenantsQuerySchema,
+  AdminLogsQuerySchema,
 } from "./admin.schema";
+import { prisma } from "../core/database/prisma";
 
 // =============================================================================
 // HANDLER: listTenants
@@ -322,4 +324,40 @@ export async function getStatsHandler(
 ): Promise<void> {
   const stats = await getSystemStats();
   reply.status(200).send(stats);
+}
+
+// =============================================================================
+// HANDLER: getTenantLogsHandler
+// =============================================================================
+// ROTA: GET /admin/tenants/:id/logs?module=estoque&limit=50
+// O QUE FAZ:
+//   Retorna os logs de acesso de um tenant específico, ordenados do mais
+//   recente para o mais antigo. Pode filtrar por módulo.
+// =============================================================================
+export async function getTenantLogsHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = AdminTenantParamsSchema.parse(request.params);
+  const { module, limit } = AdminLogsQuerySchema.parse(request.query);
+
+  const logs = await prisma.requestLog.findMany({
+    where: {
+      tenantId: id,
+      ...(module ? { module } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      module: true,
+      method: true,
+      path: true,
+      statusCode: true,
+      durationMs: true,
+      createdAt: true,
+    },
+  });
+
+  reply.status(200).send(logs);
 }

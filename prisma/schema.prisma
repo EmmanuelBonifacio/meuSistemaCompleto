@@ -86,6 +86,9 @@ model Tenant {
   // Relacionamento: um tenant pode ter vários módulos ativados
   modules   TenantModule[]
 
+  // Relacionamento: logs de requisições do tenant
+  logs      RequestLog[]
+
   @@map("tenants")
   // @@map define o nome real da tabela no banco. Seguimos snake_case no banco
   // e camelCase no código TypeScript — o Prisma faz o mapeamento automaticamente.
@@ -189,4 +192,56 @@ model AdminUser {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("admin_users")
+}
+
+// =============================================================================
+// MODELO: RequestLog
+// =============================================================================
+// Registra cada requisição feita pelos tenants ao sistema.
+// Permite ao painel admin visualizar a atividade recente de cada tenant
+// e identificar erros por módulo em tempo real.
+//
+// POR QUE GRAVAR NO BANCO E NÃO APENAS NO TERMINAL?
+//   Logs no terminal são voláteis — somem quando o servidor reinicia.
+//   Gravando no banco, o admin pode consultar o histórico de qualquer tenant
+//   a qualquer momento, inclusive após reinicios do servidor.
+//
+// ESTRATÉGIA DE RETENÇÃO:
+//   Guardamos apenas os últimos N logs por tenant para não inflar o banco.
+//   Um job periódico pode limpar logs antigos (implementação futura).
+// =============================================================================
+model RequestLog {
+  id         String   @id @default(uuid())
+
+  tenantId   String   @map("tenant_id")
+  // ID do tenant que fez a requisição (referência ao schema public)
+
+  module     String
+  // Nome do módulo acessado. Ex: "estoque", "financeiro", "tv", "admin"
+
+  method     String
+  // Método HTTP. Ex: "GET", "POST", "PATCH", "DELETE"
+
+  path       String
+  // Caminho da URL acessada. Ex: "/estoque/produtos"
+
+  statusCode Int      @map("status_code")
+  // Código HTTP de resposta. 2xx = sucesso, 4xx = erro cliente, 5xx = erro servidor
+
+  durationMs Int      @map("duration_ms")
+  // Tempo de resposta em milissegundos. Útil para detectar lentidão.
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  // Timestamp da requisição
+
+  // Relacionamento com o tenant
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  // Índice composto para consultar logs de um tenant ordenados por data (query frequente)
+
+  @@index([tenantId, module])
+  // Índice para filtrar logs por módulo de um tenant específico
+
+  @@map("request_logs")
 }
