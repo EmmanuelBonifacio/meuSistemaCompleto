@@ -30,6 +30,8 @@ import {
   removeDevice,
   controlTv,
   discoverDevices,
+  wakeDevice,
+  getDeviceHistory,
 } from "./tv.controller";
 
 // Middleware de acesso ao módulo TV (reutilizável como preHandler)
@@ -102,4 +104,24 @@ export async function tvRoutes(fastify: FastifyInstance) {
   // do ambiente. Em produção, considere limitar a frequência de chamadas.
   // --------------------------------------------------------------------------
   fastify.get("/discover", { preHandler: guards }, discoverDevices);
+
+  // --------------------------------------------------------------------------
+  // POST /tv/devices/:id/wol
+  // --------------------------------------------------------------------------
+  // Envia Magic Packet UDP para ligar uma TV via Wake-on-LAN.
+  // Requer MAC address cadastrado no dispositivo.
+  // --------------------------------------------------------------------------
+  fastify.post("/devices/:id/wol", { preHandler: guards }, wakeDevice);
+
+  // --------------------------------------------------------------------------
+  // GET /tv/devices/:id/historico
+  // --------------------------------------------------------------------------
+  // Retorna o histórico de comandos enviados para uma TV específica.
+  // Query param: ?limit=50 (padrão 50, máximo 100)
+  // --------------------------------------------------------------------------
+  fastify.get(
+    "/devices/:id/historico",
+    { preHandler: guards },
+    getDeviceHistory,
+  );
 }

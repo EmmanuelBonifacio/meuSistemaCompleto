@@ -274,3 +274,103 @@ export async function updateDeviceContentAndStatus(
     );
   });
 }
+
+// =============================================================================
+// TIPO: TvCommandLog
+// =============================================================================
+// Representa um registro do histórico de comandos enviados para uma TV.
+// Reflete a tabela tv_command_logs criada no provisioner.
+// =============================================================================
+export interface TvCommandLog {
+  id: string;
+  device_id: string;
+  device_name: string;
+  content_url: string;
+  content_type: "video" | "image" | "web";
+  protocol_used: string | null;
+  success: boolean;
+  error_message: string | null;
+  sent_at: Date;
+}
+
+// =============================================================================
+// TIPO: SaveCommandLogInput
+// =============================================================================
+export interface SaveCommandLogInput {
+  deviceId: string;
+  deviceName: string;
+  contentUrl: string;
+  contentType: "video" | "image" | "web";
+  protocolUsed: string | null;
+  success: boolean;
+  errorMessage: string | null;
+}
+
+// =============================================================================
+// FUNÇÃO: saveCommandLog
+// =============================================================================
+// O QUE FAZ:
+//   Persiste um registro no histórico de comandos enviados para uma TV.
+//   Chamada pelo controller após cada POST /tv/control,
+//   independentemente de sucesso ou falha da comunicação com a TV.
+//
+// POR QUE LOGAR MESMO SE FALHOU?
+//   Logs de falha são os mais valiosos para diagnóstico.
+//   Se uma TV fica "offline" no sistema, o histórico de tentativas
+//   facilita identificar padrões (sempre falha às 2h da manhã?
+//   IP mudou? Protocolo errado?).
+// =============================================================================
+export async function saveCommandLog(
+  schemaName: string,
+  data: SaveCommandLogInput,
+): Promise<void> {
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$executeRawUnsafe(
+      `INSERT INTO tv_command_logs
+         (device_id, device_name, content_url, content_type,
+          protocol_used, success, error_message)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)`,
+      data.deviceId,
+      data.deviceName,
+      data.contentUrl,
+      data.contentType,
+      data.protocolUsed ?? null,
+      data.success,
+      data.errorMessage ?? null,
+    );
+  });
+}
+
+// =============================================================================
+// FUNÇÃO: getCommandHistory
+// =============================================================================
+// O QUE FAZ:
+//   Retorna os últimos N comandos enviados para um dispositivo específico.
+//   Ordenados do mais recente para o mais antigo.
+//
+// POR QUE LIMITAR A 50?
+//   O histórico cresce indefinidamente. Limitar evita transferir muitos dados
+//   desnecessariamente. Para análises mais longas, um relatório separado
+//   (com filtro por data) seria mais apropriado.
+// =============================================================================
+export async function getCommandHistory(
+  schemaName: string,
+  deviceId: string,
+  limit = 50,
+): Promise<TvCommandLog[]> {
+  return withTenantSchema(schemaName, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<TvCommandLog[]>(
+      `SELECT
+         id, device_id, device_name, content_url, content_type,
+         protocol_used, success, error_message, sent_at
+       FROM tv_command_logs
+       WHERE device_id = $1::uuid
+       ORDER BY sent_at DESC
+       LIMIT $2`,
+      deviceId,
+      limit,
+    );
+
+    return rows;
+  });
+}

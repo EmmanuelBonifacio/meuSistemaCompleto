@@ -29,9 +29,15 @@ import {
   updateTvDevice,
   removeTvDevice,
   updateDeviceContentAndStatus,
+  saveCommandLog,
+  getCommandHistory,
   TV_MAX_LIMIT,
 } from "./tv.repository";
-import { discoverTvDevices, sendContentToDevice } from "./tv.service";
+import {
+  discoverTvDevices,
+  sendContentToDevice,
+  sendWakeOnLan,
+} from "./tv.service";
 
 // =============================================================================
 // HANDLER: listDevices
@@ -261,6 +267,19 @@ export async function controlTv(request: FastifyRequest, reply: FastifyReply) {
     result.success ? "online" : "offline",
   );
 
+  // --- Passo 4: Salva no histórico de comandos ---
+  // Registra o evento sempre, independente de sucesso ou falha na TV.
+  // Logs de falha são valiosos para diagnóstico posterior.
+  await saveCommandLog(schemaName, {
+    deviceId: device.id,
+    deviceName: device.name,
+    contentUrl: body.contentUrl,
+    contentType: body.contentType,
+    protocolUsed: result.protocol !== "none" ? result.protocol : null,
+    success: result.success,
+    errorMessage: result.success ? null : result.message,
+  });
+
   if (result.success) {
     request.log.info(
       `[TV] ✅ Conteúdo entregue para "${device.name}" via ${result.protocol} no tenant "${tenantName}"`,
@@ -337,6 +356,130 @@ export async function discoverDevices(
     proximo_passo:
       `Para registrar um dispositivo encontrado, use: ` +
       `POST /tv/devices com { "name": "...", "ip_address": "IP_DA_TV" }`,
+  });
+}
+
+// =============================================================================
+// HANDLER: wakeDevice
+// POST /tv/devices/:id/wol
+// =============================================================================
+// O QUE FAZ:
+//   Envia um Magic Packet UDP para ligar uma TV em modo standby via
+//   protocolo Wake-on-LAN. Só funciona se a TV tiver MAC address cadastrado.
+//
+// PRÉ-REQUISITOS:
+//   1. TV deve ter MAC address registrado no dispositivo
+//   2. TV deve suportar Wake-on-LAN (configuração na BIOS/firmware da TV)
+//   3. Servidor e TV devem estar na mesma sub-rede
+//
+// RESPOSTA:
+//   200 → Magic Packet enviado (não garante que a TV ligou — UDP é fire-and-forget)
+//   404 → Dispositivo não encontrado
+//   422 → Dispositivo sem MAC address cadastrado (WoL requer o endereço físico)
+// =============================================================================
+export async function wakeDevice(request: FastifyRequest, reply: FastifyReply) {
+  const params = TvDeviceParamsSchema.parse(request.params);
+  const { schemaName } = request.tenant!;
+
+  // Busca o dispositivo para obter o MAC address
+  const device = await findTvDeviceById(schemaName, params.id);
+
+  if (!device) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Dispositivo com ID "${params.id}" não encontrado neste tenant.`,
+    });
+  }
+
+  // WoL requer o MAC address — sem ele não é possível enviar o Magic Packet
+  if (!device.mac_address) {
+    return reply.status(422).send({
+      statusCode: 422,
+      error: "Dados Insuficientes",
+      message:
+        `O dispositivo "${device.name}" não tem MAC address cadastrado. ` +
+        `Edite o dispositivo adicionando o MAC para usar Wake-on-LAN.`,
+    });
+  }
+
+  try {
+    await sendWakeOnLan(device.mac_address);
+
+    request.log.info(
+      `[TV] ⚡ Magic Packet WoL enviado para "${device.name}" (MAC: ${device.mac_address})`,
+    );
+
+    return reply.send({
+      mensagem:
+        `Magic Packet enviado para "${device.name}". ` +
+        `Se a TV suportar Wake-on-LAN, ela deve ligar em alguns segundos.`,
+      dispositivo: {
+        id: device.id,
+        name: device.name,
+        mac_address: device.mac_address,
+      },
+      aviso:
+        `UDP é fire-and-forget — o envio não garante que a TV ligou. ` +
+        `Verifique o status após ~10 segundos.`,
+    });
+  } catch (err) {
+    const msg =
+      err instanceof Error ? err.message : "Erro ao enviar Magic Packet.";
+    return reply.status(500).send({
+      statusCode: 500,
+      error: "Erro ao Enviar WoL",
+      message: msg,
+    });
+  }
+}
+
+// =============================================================================
+// HANDLER: getDeviceHistory
+// GET /tv/devices/:id/historico
+// =============================================================================
+// O QUE FAZ:
+//   Retorna o histórico de comandos enviados para um dispositivo específico.
+//   Inclui tanto envios bem-sucedidos quanto falhas de comunicação com a TV.
+//
+// QUERY PARAMS:
+//   limit → número de registros (default 50, máximo 100)
+//
+// UTILIDADE:
+//   Permite diagnosticar padrões de falha:
+//   - A TV está sempre offline em determinado horário?
+//   - O protocolo DIAL está falhando mas UPnP não?
+//   - A URL enviada estava correta?
+// =============================================================================
+export async function getDeviceHistory(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const params = TvDeviceParamsSchema.parse(request.params);
+  const { schemaName } = request.tenant!;
+
+  // Verifica se o dispositivo existe antes de buscar o histórico
+  const device = await findTvDeviceById(schemaName, params.id);
+
+  if (!device) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Dispositivo com ID "${params.id}" não encontrado neste tenant.`,
+    });
+  }
+
+  const query = request.query as Record<string, string>;
+  const rawLimit = parseInt(query.limit ?? "50", 10);
+  const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 100);
+
+  const historico = await getCommandHistory(schemaName, params.id, limit);
+
+  return reply.send({
+    device: { id: device.id, name: device.name },
+    total: historico.length,
+    limit,
+    historico,
   });
 }
 

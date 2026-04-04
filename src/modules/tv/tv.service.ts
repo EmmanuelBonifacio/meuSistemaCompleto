@@ -62,6 +62,7 @@
 //   com um app web que receba WebSocket.
 // =============================================================================
 
+import dgram from "node:dgram";
 import { Client as SsdpClient } from "node-ssdp";
 
 // =============================================================================
@@ -486,4 +487,89 @@ function buildDlnaMetadata(url: string): string {
       `</item>` +
       `</DIDL-Lite>`,
   );
+}
+
+// =============================================================================
+// FUNÇÃO: sendWakeOnLan
+// =============================================================================
+// O QUE FAZ:
+//   Envia um "Magic Packet" UDP broadcast para ligar uma TV que esteja
+//   em modo standby e suporte Wake-on-LAN (WoL).
+//
+// O QUE É WAKE-ON-LAN?
+//   É um padrão de rede (IEEE 802.3) que permite ligar um dispositivo
+//   remotamente. O dispositivo (TV, computador) fica em standby escutando
+//   pacotes de rede. Ao receber o Magic Packet com seu MAC address,
+//   ele se liga.
+//
+// ESTRUTURA DO MAGIC PACKET:
+//   102 bytes no total:
+//   - 6 bytes de 0xFF (cabeçalho de sincronização)
+//   - 16 repetições dos 6 bytes do MAC address do dispositivo
+//
+// POR QUE UDP E NÃO TCP?
+//   TCP requer que o destino esteja online para estabelecer conexão.
+//   WoL funciona exatamente para dispositivos OFFLINE — então usamos
+//   UDP broadcast, que é enviado sem garantia de entrega mas
+//   chega mesmo a dispositivos em standby que estejam na rede.
+//
+// LIMITAÇÕES:
+//   1. Requer que a TV/monitor tenha WoL habilitado nas configurações
+//   2. Smart TVs nem sempre suportam WoL (depende do fabricante/modelo)
+//   3. Funciona na rede local — roteadores geralmente não encaminham broadcasts
+//   4. O servidor e a TV devem estar na mesma sub-rede
+// =============================================================================
+export async function sendWakeOnLan(
+  macAddress: string,
+  broadcastAddress = "255.255.255.255",
+  port = 9,
+): Promise<void> {
+  // Remove os separadores do MAC (aceita formato AA:BB:CC:DD:EE:FF ou AA-BB-CC-DD-EE-FF)
+  const mac = macAddress.replace(/[:-]/g, "");
+
+  if (mac.length !== 12 || !/^[0-9a-fA-F]{12}$/.test(mac)) {
+    throw new Error(
+      `MAC address inválido: "${macAddress}". Formato esperado: AA:BB:CC:DD:EE:FF`,
+    );
+  }
+
+  // Monta o Magic Packet:
+  // - Bytes 0..5  → 0xFF (sincronização)
+  // - Bytes 6..101 → MAC repetido 16 vezes (6 bytes × 16 = 96 bytes)
+  const magicPacket = Buffer.alloc(102);
+  for (let i = 0; i < 6; i++) magicPacket[i] = 0xff;
+
+  const macBytes = Buffer.from(mac, "hex");
+  for (let i = 1; i <= 16; i++) {
+    macBytes.copy(magicPacket, i * 6, 0, 6);
+  }
+
+  // Envia via UDP broadcast
+  // setBroadcast(true) é obrigatório para enviar para 255.255.255.255
+  return new Promise((resolve, reject) => {
+    const socket = dgram.createSocket("udp4");
+
+    socket.once("error", (err) => {
+      socket.close();
+      reject(err);
+    });
+
+    // bind() sem argumentos deixa o SO escolher porta e interface
+    // setBroadcast PRECISA ser chamado após bind e ANTES de send
+    socket.bind(() => {
+      socket.setBroadcast(true);
+      socket.send(
+        magicPacket,
+        0,
+        magicPacket.length,
+        port,
+        broadcastAddress,
+        (err) => {
+          socket.close();
+          if (err) reject(err);
+          else resolve();
+        },
+      );
+    });
+  });
 }

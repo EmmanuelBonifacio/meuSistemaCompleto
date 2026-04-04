@@ -153,6 +153,47 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
       ON "${schemaName}".tv_devices (status)`,
 
     // -----------------------------------------------------------------
+    // TABELA: tv_command_logs (Histórico de Comandos — Módulo TV)
+    // -----------------------------------------------------------------
+    // Registra cada vez que o tenant envia um comando para uma TV.
+    // Mesmo quando a TV não responde (success=false), o log é gravado
+    // para diagnóstico posterior.
+    //
+    // POR QUE NÃO TEM FOREIGN KEY PARA tv_devices?
+    //   Se uma TV for removida (DELETE), ainda queremos manter o histórico
+    //   de comandos enviados a ela para fins de auditoria. Com FK + ON DELETE
+    //   CASCADE perderíamos esses registros. Armazenamos device_name de forma
+    //   desnormalizada para não precisar fazer JOIN após a remoção.
+    //
+    // CAMPOS:
+    //   device_id     → UUID do dispositivo (sem FK — desacoplado do ciclo de vida da TV)
+    //   device_name   → nome da TV no momento do envio (para exibição histórica)
+    //   content_url   → URL enviada para a tela
+    //   content_type  → 'video' | 'image' | 'web'
+    //   protocol_used → 'upnp' | 'dial' | 'none' (qual protocolo foi usado)
+    //   success       → true se a TV respondeu ao comando, false se não respondeu
+    //   error_message → detalhe do erro quando success=false (para diagnóstico)
+    //   sent_at       → timestamp exato do envio
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".tv_command_logs (
+      id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      device_id     UUID         NOT NULL,
+      device_name   VARCHAR(100) NOT NULL,
+      content_url   TEXT         NOT NULL,
+      content_type  VARCHAR(20)  NOT NULL
+                    CONSTRAINT tv_command_logs_type_check
+                    CHECK (content_type IN ('video', 'image', 'web')),
+      protocol_used VARCHAR(20),
+      success       BOOLEAN      NOT NULL,
+      error_message TEXT,
+      sent_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    )`,
+
+    // Índice para buscar histórico de um device específico (ordenado do mais recente)
+    `CREATE INDEX IF NOT EXISTS idx_tv_command_logs_device
+      ON "${schemaName}".tv_command_logs (device_id, sent_at DESC)`,
+
+    // -----------------------------------------------------------------
     // TABELA: users (Módulo de Autenticação)
     // -----------------------------------------------------------------
     // Armazena os usuários que fazem login no sistema para este tenant.
