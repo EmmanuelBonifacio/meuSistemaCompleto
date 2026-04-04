@@ -51,7 +51,7 @@ export interface TvDevice {
 // TIPO: TvDeviceListResult
 // =============================================================================
 export interface TvDeviceListResult {
-  data: TvDevice[];
+  devices: TvDevice[];
   total: number;
   limite_maximo: number; // informativo: lembra o consumidor do limite de 5
 }
@@ -86,7 +86,7 @@ export async function findAllTvDevices(
     );
 
     return {
-      data: rows,
+      devices: rows,
       total,
       limite_maximo: TV_MAX_LIMIT,
     };
