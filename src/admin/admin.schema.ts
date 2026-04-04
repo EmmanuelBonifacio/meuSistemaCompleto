@@ -135,3 +135,102 @@ export const AdminLogsQuerySchema = z.object({
 });
 
 export type AdminLogsQuery = z.infer<typeof AdminLogsQuerySchema>;
+
+// =============================================================================
+// SCHEMAS: Gestão de usuários de tenant (admin)
+// =============================================================================
+// Usado nas rotas: GET/POST /admin/tenants/:id/users
+//                  PATCH/DELETE /admin/tenants/:id/users/:userId
+//                  POST /admin/tenants/:id/users/:userId/reset-password
+// =============================================================================
+
+/**
+ * Parâmetros de rota que incluem tanto tenantId quanto userId.
+ * Usado em: PATCH, DELETE, POST /reset-password
+ */
+export const AdminUserParamsSchema = z.object({
+  id: z.string().uuid("ID do tenant deve ser um UUID válido"),
+  userId: z.string().uuid("ID do usuário deve ser um UUID válido"),
+});
+
+export type AdminUserParams = z.infer<typeof AdminUserParamsSchema>;
+
+/**
+ * Body para criação de usuário dentro de um tenant.
+ * O admin informa email, nome, senha e role.
+ * A senha será convertida em bcrypt hash pelo controller.
+ */
+export const AdminCreateUserSchema = z.object({
+  email: z
+    .string({ required_error: "E-mail é obrigatório" })
+    .email("E-mail inválido")
+    .toLowerCase()
+    .trim(),
+
+  name: z
+    .string({ required_error: "Nome é obrigatório" })
+    .min(2, "Nome deve ter no mínimo 2 caracteres")
+    .max(100, "Nome pode ter no máximo 100 caracteres")
+    .trim(),
+
+  // Senha mínima de 8 caracteres para garantir segurança básica (OWASP).
+  // O admin define a senha inicial — o usuário deve trocar no primeiro acesso.
+  password: z
+    .string({ required_error: "Senha é obrigatória" })
+    .min(8, "Senha deve ter no mínimo 8 caracteres"),
+
+  // "admin" = gerencia o tenant | "user" = acesso somente leitura/uso
+  role: z.enum(["admin", "user"], {
+    required_error: "Role é obrigatório",
+    invalid_type_error: "Role deve ser 'admin' ou 'user'",
+  }),
+});
+
+export type AdminCreateUserInput = z.infer<typeof AdminCreateUserSchema>;
+
+/**
+ * Body para atualização parcial de um usuário (PATCH).
+ * Todos os campos são opcionais — apenas os enviados são alterados.
+ */
+export const AdminUpdateUserSchema = z
+  .object({
+    name: z
+      .string()
+      .min(2, "Nome deve ter no mínimo 2 caracteres")
+      .max(100, "Nome pode ter no máximo 100 caracteres")
+      .trim()
+      .optional(),
+
+    role: z
+      .enum(["admin", "user"], {
+        invalid_type_error: "Role deve ser 'admin' ou 'user'",
+      })
+      .optional(),
+
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    // Garante que pelo menos um campo foi enviado — PATCH sem campos = erro
+    (data) =>
+      data.name !== undefined ||
+      data.role !== undefined ||
+      data.isActive !== undefined,
+    {
+      message:
+        "Informe pelo menos um campo para atualizar (name, role, isActive)",
+    },
+  );
+
+export type AdminUpdateUserInput = z.infer<typeof AdminUpdateUserSchema>;
+
+/**
+ * Body para reset de senha pelo admin.
+ * Sem verificação da senha antiga — o admin tem autoridade sobre todos os usuários.
+ */
+export const AdminResetPasswordSchema = z.object({
+  newPassword: z
+    .string({ required_error: "Nova senha é obrigatória" })
+    .min(8, "Senha deve ter no mínimo 8 caracteres"),
+});
+
+export type AdminResetPasswordInput = z.infer<typeof AdminResetPasswordSchema>;

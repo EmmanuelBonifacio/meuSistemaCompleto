@@ -36,6 +36,11 @@ import {
   toggleModuleHandler,
   getStatsHandler,
   getTenantLogsHandler,
+  listTenantUsersHandler,
+  createTenantUserHandler,
+  updateTenantUserHandler,
+  resetTenantUserPasswordHandler,
+  deleteTenantUserHandler,
 } from "./admin.controller";
 
 // =============================================================================
@@ -136,4 +141,26 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   // Query params: ?module=estoque&limit=50
   // ==========================================================================
   fastify.get("/tenants/:id/logs", getTenantLogsHandler);
+
+  // ==========================================================================
+  // ROTAS: Gestão de usuários de tenant
+  // ==========================================================================
+  // Permitem ao admin criar, listar, editar e remover usuários dentro de
+  // qualquer tenant — sem precisar de acesso ao banco diretamente.
+  //
+  // PADRÃO REST ANINHADO:
+  //   GET    /admin/tenants/:id/users                      → listar
+  //   POST   /admin/tenants/:id/users                      → criar
+  //   PATCH  /admin/tenants/:id/users/:userId              → editar
+  //   POST   /admin/tenants/:id/users/:userId/reset-password → trocar senha
+  //   DELETE /admin/tenants/:id/users/:userId              → remover
+  // ==========================================================================
+  fastify.get("/tenants/:id/users", listTenantUsersHandler);
+  fastify.post("/tenants/:id/users", createTenantUserHandler);
+  fastify.patch("/tenants/:id/users/:userId", updateTenantUserHandler);
+  fastify.post(
+    "/tenants/:id/users/:userId/reset-password",
+    resetTenantUserPasswordHandler,
+  );
+  fastify.delete("/tenants/:id/users/:userId", deleteTenantUserHandler);
 }

@@ -34,8 +34,22 @@ import {
   AdminToggleModuleSchema,
   AdminListTenantsQuerySchema,
   AdminLogsQuerySchema,
+  AdminUserParamsSchema,
+  AdminCreateUserSchema,
+  AdminUpdateUserSchema,
+  AdminResetPasswordSchema,
 } from "./admin.schema";
 import { prisma } from "../core/database/prisma";
+import bcrypt from "bcrypt";
+import {
+  listTenantUsers,
+  findTenantUserById,
+  findTenantUserByEmail,
+  createTenantUser,
+  updateTenantUser,
+  resetTenantUserPassword,
+  deleteTenantUser,
+} from "./admin.users.repository";
 
 // =============================================================================
 // HANDLER: listTenants
@@ -360,4 +374,237 @@ export async function getTenantLogsHandler(
   });
 
   reply.status(200).send(logs);
+}
+
+// =============================================================================
+// HANDLER: listTenantUsersHandler
+// =============================================================================
+// ROTA: GET /admin/tenants/:id/users
+// O QUE FAZ:
+//   Lista todos os usuários cadastrados no schema de um tenant.
+//   Retorna id, email, nome, role, is_active, created_at — SEM password_hash.
+// =============================================================================
+export async function listTenantUsersHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = AdminTenantParamsSchema.parse(request.params);
+
+  // Busca o tenant para obter o schemaName e confirmar que existe
+  const tenant = await findTenantByIdAdmin(id);
+  if (!tenant) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Tenant com ID "${id}" não encontrado.`,
+    });
+  }
+
+  const users = await listTenantUsers(tenant.schemaName);
+  reply.status(200).send(users);
+}
+
+// =============================================================================
+// HANDLER: createTenantUserHandler
+// =============================================================================
+// ROTA: POST /admin/tenants/:id/users
+// O QUE FAZ:
+//   Cria um novo usuário no schema do tenant.
+//   O admin define email, nome, senha inicial e role.
+//   A senha é hashed com bcrypt (custo 12) ANTES de persistir.
+//
+// SEGURANÇA:
+//   ✅ Verifica duplicidade de e-mail antes de inserir (409 com mensagem clara)
+//   ✅ Hash bcrypt custo 12 (OWASP recomendado)
+//   ✅ Nunca retorna password_hash na resposta
+// =============================================================================
+export async function createTenantUserHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = AdminTenantParamsSchema.parse(request.params);
+  const data = AdminCreateUserSchema.parse(request.body);
+
+  const tenant = await findTenantByIdAdmin(id);
+  if (!tenant) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Tenant com ID "${id}" não encontrado.`,
+    });
+  }
+
+  // Verifica se o e-mail já está em uso neste tenant
+  const existing = await findTenantUserByEmail(tenant.schemaName, data.email);
+  if (existing) {
+    return reply.status(409).send({
+      statusCode: 409,
+      error: "Conflito",
+      message: `O e-mail "${data.email}" já está cadastrado neste tenant.`,
+    });
+  }
+
+  // Gera hash bcrypt da senha — jamais persistir senha em texto puro
+  const passwordHash = await bcrypt.hash(data.password, 12);
+
+  const user = await createTenantUser(tenant.schemaName, {
+    email: data.email,
+    name: data.name,
+    passwordHash,
+    role: data.role,
+  });
+
+  request.log.info(
+    `[Admin] 👤 Usuário "${data.email}" criado no tenant "${tenant.name}" por admin: ${request.user.sub}`,
+  );
+
+  reply.status(201).send({
+    mensagem: `Usuário "${data.email}" criado com sucesso no tenant "${tenant.name}".`,
+    usuario: user,
+  });
+}
+
+// =============================================================================
+// HANDLER: updateTenantUserHandler
+// =============================================================================
+// ROTA: PATCH /admin/tenants/:id/users/:userId
+// O QUE FAZ:
+//   Atualiza nome, role e/ou status ativo de um usuário de tenant.
+//   Todos os campos são opcionais — apenas os enviados são alterados.
+// =============================================================================
+export async function updateTenantUserHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id, userId } = AdminUserParamsSchema.parse(request.params);
+  const data = AdminUpdateUserSchema.parse(request.body);
+
+  const tenant = await findTenantByIdAdmin(id);
+  if (!tenant) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Tenant com ID "${id}" não encontrado.`,
+    });
+  }
+
+  const existingUser = await findTenantUserById(tenant.schemaName, userId);
+  if (!existingUser) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Usuário com ID "${userId}" não encontrado neste tenant.`,
+    });
+  }
+
+  const updated = await updateTenantUser(tenant.schemaName, userId, {
+    name: data.name,
+    role: data.role,
+    isActive: data.isActive,
+  });
+
+  request.log.info(
+    `[Admin] ✏️ Usuário "${existingUser.email}" atualizado no tenant "${tenant.name}" por admin: ${request.user.sub}`,
+  );
+
+  reply.status(200).send({
+    mensagem: `Usuário atualizado com sucesso.`,
+    usuario: updated,
+  });
+}
+
+// =============================================================================
+// HANDLER: resetTenantUserPasswordHandler
+// =============================================================================
+// ROTA: POST /admin/tenants/:id/users/:userId/reset-password
+// O QUE FAZ:
+//   Redefine a senha de um usuário sem exigir a senha antiga.
+//   Operação exclusiva do superadmin — útil quando o usuário esqueceu a senha.
+//
+// SEGURANÇA:
+//   ✅ Rota protegida pelo adminMiddleware (role = superadmin)
+//   ✅ Mínimo de 8 caracteres validado pelo schema Zod
+//   ✅ Hash bcrypt custo 12 antes de persistir
+//   ✅ Evento logado para auditoria (quem fez, em qual tenant)
+// =============================================================================
+export async function resetTenantUserPasswordHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id, userId } = AdminUserParamsSchema.parse(request.params);
+  const { newPassword } = AdminResetPasswordSchema.parse(request.body);
+
+  const tenant = await findTenantByIdAdmin(id);
+  if (!tenant) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Tenant com ID "${id}" não encontrado.`,
+    });
+  }
+
+  const user = await findTenantUserById(tenant.schemaName, userId);
+  if (!user) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Usuário com ID "${userId}" não encontrado neste tenant.`,
+    });
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 12);
+  await resetTenantUserPassword(tenant.schemaName, userId, newHash);
+
+  // Log de auditoria — essencial para rastrear quem alterou qual senha
+  request.log.warn(
+    `[Admin] 🔑 Senha do usuário "${user.email}" (tenant: "${tenant.name}") REDEFINIDA por admin: ${request.user.sub}`,
+  );
+
+  reply.status(200).send({
+    mensagem: `Senha do usuário "${user.email}" redefinida com sucesso.`,
+    aviso: "O usuário deverá usar a nova senha no próximo login.",
+  });
+}
+
+// =============================================================================
+// HANDLER: deleteTenantUserHandler
+// =============================================================================
+// ROTA: DELETE /admin/tenants/:id/users/:userId
+// O QUE FAZ:
+//   Remove permanentemente um usuário do schema do tenant.
+//   Operação irreversível — confirmação deve ser feita no frontend.
+// =============================================================================
+export async function deleteTenantUserHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id, userId } = AdminUserParamsSchema.parse(request.params);
+
+  const tenant = await findTenantByIdAdmin(id);
+  if (!tenant) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Tenant com ID "${id}" não encontrado.`,
+    });
+  }
+
+  const user = await findTenantUserById(tenant.schemaName, userId);
+  if (!user) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Usuário com ID "${userId}" não encontrado neste tenant.`,
+    });
+  }
+
+  await deleteTenantUser(tenant.schemaName, userId);
+
+  request.log.warn(
+    `[Admin] 🗑️ Usuário "${user.email}" REMOVIDO do tenant "${tenant.name}" por admin: ${request.user.sub}`,
+  );
+
+  reply.status(200).send({
+    mensagem: `Usuário "${user.email}" removido com sucesso do tenant "${tenant.name}".`,
+  });
 }

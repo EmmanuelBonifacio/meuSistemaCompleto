@@ -15,6 +15,8 @@
 import Fastify from "fastify";
 import fastifyJwt from "@fastify/jwt";
 import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { disconnectPrisma } from "./core/database/prisma";
 import { tenantMiddleware } from "./core/middleware/tenant.middleware";
 import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
@@ -77,6 +79,57 @@ async function buildServer() {
 
   await app.register(fastifyJwt, {
     secret: jwtSecret,
+  });
+
+  // ---------------------------------------------------------------------------
+  // PLUGIN: HELMET — Security Headers HTTP
+  // ---------------------------------------------------------------------------
+  // O QUE FAZ:
+  //   Define cabeçalhos HTTP de segurança automaticamente em todas as respostas.
+  //   Cada header protege contra um tipo específico de ataque:
+  //
+  //   - Content-Security-Policy (CSP): previne XSS ao restringir fontes de scripts
+  //   - X-Content-Type-Options: impede o browser de "adivinhar" o MIME type
+  //   - X-Frame-Options: bloqueia clickjacking (embedding em iframes maliciosos)
+  //   - Strict-Transport-Security (HSTS): força HTTPS em produção
+  //   - Referrer-Policy: controla quais dados de URL são enviados como referrer
+  //
+  // POR QUE HELMET ANTES DO CORS?
+  //   Os headers de segurança devem ser aplicados a TODAS as respostas,
+  //   incluindo as de erro. Registrar o Helmet primeiro garante isso.
+  // ---------------------------------------------------------------------------
+  await app.register(fastifyHelmet, {
+    // CSP desabilitado em dev (quebraria as DevTools do browser)
+    // Em produção, configure conforme as fontes que sua aplicação usa
+    contentSecurityPolicy: process.env.NODE_ENV === "production",
+  });
+
+  // ---------------------------------------------------------------------------
+  // PLUGIN: RATE LIMIT — Proteção contra Brute Force
+  // ---------------------------------------------------------------------------
+  // O QUE FAZ:
+  //   Limita o número de requisições por IP em um dado intervalo de tempo.
+  //   Aplicado globalmente, com configurações específicas mais restritivas
+  //   nas rotas de login (via config inline nas rotas).
+  //
+  // POR QUE RATE LIMIT É CRÍTICO EM ROTAS DE LOGIN?
+  //   Sem rate limit, um atacante pode tentar 1.000.000 senhas por segundo.
+  //   Com 10 tentativas / minuto por IP, um ataque de dicionário levaria
+  //   anos para completar — inviabilizando o brute force.
+  //
+  // CONFIGURAÇÃO GLOBAL (fallback para rotas não configuradas individualmente):
+  //   200 requisições por minuto por IP — generoso para uso normal da API
+  // ---------------------------------------------------------------------------
+  await app.register(fastifyRateLimit, {
+    global: true,
+    max: 200,
+    timeWindow: "1 minute",
+    // Mensagem de erro padronizada e sem revelar detalhes internos
+    errorResponseBuilder: (_request, context) => ({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Muitas requisições. Tente novamente em ${Math.ceil(context.ttl / 1000)} segundos.`,
+    }),
   });
 
   // ---------------------------------------------------------------------------

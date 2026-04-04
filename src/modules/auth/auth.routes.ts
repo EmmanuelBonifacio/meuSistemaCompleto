@@ -24,8 +24,23 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   // ==========================================================================
   // Rota PÚBLICA — sem nenhum preHandler de autenticação.
   // A autenticação acontece DENTRO do handler (verifica email+senha no banco).
+  //
+  // RATE LIMIT ESPECÍFICO: 10 tentativas por minuto por IP.
+  // Mais restritivo que o global (200/min) pois esta é a rota mais crítica
+  // do sistema — alvo preferído de ataques de brute force.
   // ==========================================================================
-  fastify.post("/login", login);
+  fastify.post(
+    "/login",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
+    },
+    login,
+  );
 
   // ==========================================================================
   // ROTA: POST /auth/refresh

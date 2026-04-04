@@ -37,11 +37,26 @@ export async function adminAuthRoutes(fastify: FastifyInstance): Promise<void> {
   // Rota completamente pública — sem preHandler de autenticação.
   // O handler `adminLogin` valida credenciais e emite JWT com role "superadmin".
   //
+  // RATE LIMIT ESPECÍFICO: 10 tentativas por minuto por IP.
+  // O painel admin é o alvo mais sensível do sistema.
+  // 10 tentativas/min ainda permite um admin legítimo entrar com conforto.
+  //
   // POR QUE POST E NÃO GET?
   //   Credenciais (email + senha) vão no BODY da requisição, nunca na URL.
   //   GET coloca os dados na URL — ficam em logs do servidor, histórico do
   //   browser e cabeçalhos de referência. POST garante que vão no body
   //   (trafegam criptografados pelo TLS em produção).
   // ==========================================================================
-  fastify.post("/login", adminLogin);
+  fastify.post(
+    "/login",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute",
+        },
+      },
+    },
+    adminLogin,
+  );
 }
