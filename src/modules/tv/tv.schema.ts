@@ -37,12 +37,10 @@ export const RegisterTvDeviceSchema = z.object({
     .max(100, "Nome muito longo (máx 100 chars)")
     .trim(),
 
-  ip_address: z
-    .string()
-    .ip({
-      message:
-        "Endereço IP inválido. Use formato IPv4 (ex: 192.168.1.10) ou IPv6",
-    }),
+  ip_address: z.string().ip({
+    message:
+      "Endereço IP inválido. Use formato IPv4 (ex: 192.168.1.10) ou IPv6",
+  }),
 
   mac_address: z
     .string()
@@ -134,3 +132,90 @@ export const ControlTvSchema = z.object({
 export type RegisterTvDeviceInput = z.infer<typeof RegisterTvDeviceSchema>;
 export type UpdateTvDeviceInput = z.infer<typeof UpdateTvDeviceSchema>;
 export type ControlTvInput = z.infer<typeof ControlTvSchema>;
+
+// =============================================================================
+// SCHEMA: CastPayloadSchema
+// =============================================================================
+// Usado em POST /tv/cast — enviar conteúdo para uma TV via waterfall de
+// múltiplos protocolos (WebSocket → Chromecast → UPnP/DIAL).
+//
+// CAMPO: tipo
+//   'timer'  → Cronômetro HTML+JS rodando no receiver.html na TV.
+//              ÚNICO protocolo disponível: WebSocket. Se TV não estiver
+//              conectada ao socket, o envio falha completamente.
+//              Requer: duracao (segundos)
+//
+//   'video'  → Reproduz vídeo (MP4, HLS, IPTV stream).
+//              Waterfall: WebSocket → Chromecast → UPnP AVTransport
+//              Requer: url (URL do stream ou arquivo)
+//
+//   'image'  → Exibe imagem em fullscreen.
+//              Waterfall: WebSocket → Chromecast → UPnP AVTransport
+//              Requer: url (URL da imagem JPG/PNG)
+//
+//   'web'    → Abre URL em fullscreen (iframe no receiver.html)
+//              Waterfall: WebSocket → Chromecast → DIAL
+//              Requer: url (URL da página)
+//
+//   'clear'  → Limpa a tela — volta ao estado de espera.
+//              ÚNICO protocolo disponível: WebSocket.
+//              Sem parâmetros adicionais.
+//
+// VALIDAÇÃO CROSS-FIELD (refinamento Zod):
+//   'timer' → duracao obrigatório (em segundos, 1–86400)
+//   'video' | 'image' | 'web' → url obrigatório
+//   'clear' → nenhum campo adicional necessário
+// =============================================================================
+export const CastPayloadSchema = z
+  .object({
+    deviceId: z
+      .string()
+      .uuid("deviceId deve ser um UUID válido — consulte GET /tv/devices"),
+
+    tipo: z.enum(["timer", "video", "image", "web", "clear"], {
+      errorMap: () => ({
+        message: "tipo deve ser: 'timer', 'video', 'image', 'web' ou 'clear'",
+      }),
+    }),
+
+    url: z
+      .string()
+      .url("url deve ser uma URL válida (ex: https://servidor/video.mp4)")
+      .optional(),
+
+    duracao: z
+      .number()
+      .int("duracao deve ser um número inteiro de segundos")
+      .min(1, "duracao mínima: 1 segundo")
+      .max(86400, "duracao máxima: 86400 segundos (24 horas)")
+      .optional(),
+
+    // Texto exibido no cronômetro (ex: "Fila de Atendimento", "Exame em")
+    label: z
+      .string()
+      .max(100, "label muito longa (máx 100 caracteres)")
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.tipo === "timer" && !data.duracao) return false;
+      if (["video", "image", "web"].includes(data.tipo) && !data.url)
+        return false;
+      return true;
+    },
+    {
+      message:
+        "'timer' requer o campo 'duracao' (segundos). " +
+        "'video', 'image' e 'web' requerem o campo 'url'.",
+    },
+  );
+
+// =============================================================================
+// SCHEMA: PairDeviceParamsSchema
+// =============================================================================
+// Usado em POST /tv/devices/:id/pair — obtém socket_token do dispositivo.
+// Reutiliza TvDeviceParamsSchema (mesma validação de UUID).
+// =============================================================================
+export const PairDeviceParamsSchema = TvDeviceParamsSchema;
+
+export type CastPayloadInput = z.infer<typeof CastPayloadSchema>;

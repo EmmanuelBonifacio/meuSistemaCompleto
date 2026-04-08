@@ -32,6 +32,9 @@ import {
   discoverDevices,
   wakeDevice,
   getDeviceHistory,
+  castToTv,
+  pairDevice,
+  getDeviceToken,
 } from "./tv.controller";
 
 // Middleware de acesso ao módulo TV (reutilizável como preHandler)
@@ -124,4 +127,37 @@ export async function tvRoutes(fastify: FastifyInstance) {
     { preHandler: guards },
     getDeviceHistory,
   );
+
+  // --------------------------------------------------------------------------
+  // POST /tv/cast
+  // --------------------------------------------------------------------------
+  // Envia conteúdo para uma TV via waterfall multi-protocolo:
+  //   WebSocket (socket.io) → Chromecast → UPnP/DLNA → DIAL
+  //
+  // Suporta: timer, video, image, web, clear
+  // Body: { deviceId, tipo, url?, duracao?, label? }
+  //
+  // Diferença vs POST /tv/control:
+  //   /control → UPnP/DIAL direto (legado, sem WebSocket)
+  //   /cast    → Waterfall inteligente, prioriza WebSocket (<100ms)
+  // --------------------------------------------------------------------------
+  fastify.post("/cast", { preHandler: guards }, castToTv);
+
+  // --------------------------------------------------------------------------
+  // POST /tv/devices/:id/pair
+  // --------------------------------------------------------------------------
+  // Gera um novo socket_token para o dispositivo.
+  // Retorna a URL do receiver.html com o token embutido na query string.
+  // A TV deve abrir essa URL no browser para parear com o WebSocket.
+  // ATENÇÃO: rotaciona o token — desconecta sessão anterior do receiver.
+  // --------------------------------------------------------------------------
+  fastify.post("/devices/:id/pair", { preHandler: guards }, pairDevice);
+
+  // --------------------------------------------------------------------------
+  // GET /tv/devices/:id/token
+  // --------------------------------------------------------------------------
+  // Retorna o socket_token ATUAL (sem rotacionar) e a receiverUrl.
+  // Útil para exibir QR code de releitura sem desconectar a TV.
+  // --------------------------------------------------------------------------
+  fastify.get("/devices/:id/token", { preHandler: guards }, getDeviceToken);
 }

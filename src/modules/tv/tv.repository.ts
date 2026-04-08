@@ -43,6 +43,11 @@ export interface TvDevice {
   status: "online" | "offline";
   current_content: string | null;
   last_seen_at: Date | null;
+  // Campos Multi-Protocolo
+  // chromecast_id: ID do dispositivo Chromecast (usado pelo Cast SDK no frontend)
+  chromecast_id: string | null;
+  // socket_token: UUID que autentica o receiver.html da TV no WebSocket
+  socket_token: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -78,7 +83,9 @@ export async function findAllTvDevices(
     const rows = await tx.$queryRawUnsafe<TvDevice[]>(
       `SELECT
          id, name, ip_address, mac_address, status,
-         current_content, last_seen_at, created_at, updated_at
+         current_content, last_seen_at,
+         chromecast_id, socket_token,
+         created_at, updated_at
        FROM tv_devices
        ORDER BY
          CASE WHEN status = 'online' THEN 0 ELSE 1 END,
@@ -106,7 +113,9 @@ export async function findTvDeviceById(
     const rows = await tx.$queryRawUnsafe<TvDevice[]>(
       `SELECT
          id, name, ip_address, mac_address, status,
-         current_content, last_seen_at, created_at, updated_at
+         current_content, last_seen_at,
+         chromecast_id, socket_token,
+         created_at, updated_at
        FROM tv_devices
        WHERE id = $1::uuid`,
       id,
@@ -161,7 +170,9 @@ export async function registerTvDevice(
       `INSERT INTO tv_devices (name, ip_address, mac_address)
        VALUES ($1, $2, $3)
        RETURNING id, name, ip_address, mac_address, status,
-                 current_content, last_seen_at, created_at, updated_at`,
+                 current_content, last_seen_at,
+                 chromecast_id, socket_token,
+                 created_at, updated_at`,
       data.name,
       data.ip_address,
       data.mac_address ?? null,
@@ -201,6 +212,12 @@ export async function updateTvDevice(
       setClauses.push(`mac_address = $${values.length}`);
     }
 
+    // Campos Multi-Protocolo: chromecast_id pode ser atualizado via PATCH
+    if ((data as any).chromecast_id !== undefined) {
+      values.push((data as any).chromecast_id);
+      setClauses.push(`chromecast_id = $${values.length}`);
+    }
+
     // Sempre atualiza o updated_at (auditoria básica)
     setClauses.push(`updated_at = NOW()`);
 
@@ -212,7 +229,9 @@ export async function updateTvDevice(
        SET ${setClauses.join(", ")}
        WHERE id = $${idParamIndex}::uuid
        RETURNING id, name, ip_address, mac_address, status,
-                 current_content, last_seen_at, created_at, updated_at`,
+                 current_content, last_seen_at,
+                 chromecast_id, socket_token,
+                 created_at, updated_at`,
       ...values,
     );
 
@@ -300,8 +319,10 @@ export interface SaveCommandLogInput {
   deviceId: string;
   deviceName: string;
   contentUrl: string;
-  contentType: "video" | "image" | "web";
-  protocolUsed: string | null;
+  // 'timer' adicionado para suporte ao cronômetro via WebSocket
+  contentType: "video" | "image" | "web" | "timer";
+  // Expandido: 'websocket' | 'chromecast' | 'upnp' | 'dial' | 'none'
+  protocolUsed: "websocket" | "chromecast" | "upnp" | "dial" | "none" | null;
   success: boolean;
   errorMessage: string | null;
 }
@@ -372,5 +393,89 @@ export async function getCommandHistory(
     );
 
     return rows;
+  });
+}
+
+// =============================================================================
+// FUNÇÃO: updateDeviceChromecastId
+// =============================================================================
+// O QUE FAZ:
+//   Salva o ID do dispositivo Chromecast associado a uma TV.
+//   Chamada quando o operador pareia a TV via Cast SDK no frontend.
+//
+// POR QUE SEPARAR DO updateTvDevice?
+//   O pareamento Chromecast é uma operação de configuração de protocolo,
+//   não uma edição de dados da TV. Manter separado facilita auditar e
+//   revogar acessos sem mexer nos dados principais do dispositivo.
+// =============================================================================
+export async function updateDeviceChromecastId(
+  schemaName: string,
+  deviceId: string,
+  chromecastId: string | null,
+): Promise<void> {
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE tv_devices
+       SET chromecast_id = $1, updated_at = NOW()
+       WHERE id = $2::uuid`,
+      chromecastId,
+      deviceId,
+    );
+  });
+}
+
+// =============================================================================
+// FUNÇÃO: rotateSocketToken
+// =============================================================================
+// O QUE FAZ:
+//   Gera um novo socket_token para um dispositivo, invalidando o anterior.
+//   O receiver.html na TV precisará de reconexão com o novo token após isso.
+//
+// QUANDO USAR?
+//   - Quando o operador suspeitar que o token foi comprometido
+//   - Quando a TV for cedida a outro usuário
+//   - Rotação periódica de segurança
+// =============================================================================
+export async function rotateSocketToken(
+  schemaName: string,
+  deviceId: string,
+): Promise<string> {
+  return withTenantSchema(schemaName, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<[{ socket_token: string }]>(
+      `UPDATE tv_devices
+       SET socket_token = gen_random_uuid(), updated_at = NOW()
+       WHERE id = $1::uuid
+       RETURNING socket_token::text`,
+      deviceId,
+    );
+    return rows[0].socket_token;
+  });
+}
+
+// =============================================================================
+// FUNÇÃO: findDeviceBySocketToken
+// =============================================================================
+// O QUE FAZ:
+//   Localiza um dispositivo pelo socket_token.
+//   Chamada no middleware de autenticação WebSocket quando o receiver.html
+//   se conecta com ?token=<uuid> na query string do socket.
+//
+// POR QUE RETORNAR schemaName ANINHADO?
+//   O WebSocket server não tem acesso ao tenant do request HTTP.
+//   Precisamos do tenantId para montar o namespace correto e do schemaName
+//   para logar o comando no banco correto.
+// =============================================================================
+export async function findDeviceBySocketToken(
+  schemaName: string,
+  token: string,
+): Promise<Pick<TvDevice, "id" | "name"> | null> {
+  return withTenantSchema(schemaName, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Pick<TvDevice, "id" | "name">[]>(
+      `SELECT id, name
+       FROM tv_devices
+       WHERE socket_token = $1::uuid`,
+      token,
+    );
+    return rows[0] ?? null;
   });
 }

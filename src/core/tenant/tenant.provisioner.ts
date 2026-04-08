@@ -142,6 +142,23 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
                       CHECK (status IN ('online', 'offline')),
       current_content TEXT,
       last_seen_at    TIMESTAMPTZ,
+      --
+      -- NOVOS CAMPOS — Integração Multi-Protocolo
+      --
+      -- chromecast_id: ID do dispositivo Chromecast na rede local.
+      --   Ex: "Chromecast-Ultra-a8f2..." (vem da API Cast SDK).
+      --   Necessário para envio via protocolo Chromecast sem precisar
+      --   do IP: o Cast SDK faz o roteamento pelo receiver app ID.
+      chromecast_id   VARCHAR(200),
+      --
+      -- socket_token: token UUID que autentica o app receptor (receiver.html)
+      --   ao conectar ao WebSocket deste backend.
+      --   POR QUE UM TOKEN SEPARADO E NÃO O JWT DO TENANT?
+      --   O app receptor roda dentro do browser da TV, um ambiente sem
+      --   usuário logado. Um token de sessão dedicado — rotacionável,
+      --   revogável por device — é mais seguro e mais simples de gerenciar.
+      socket_token    UUID         DEFAULT gen_random_uuid(),
+      --
       created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
       updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
       -- IP único por tenant: dois devices não podem ter o mesmo IP no schema
@@ -182,8 +199,16 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
       content_url   TEXT         NOT NULL,
       content_type  VARCHAR(20)  NOT NULL
                     CONSTRAINT tv_command_logs_type_check
-                    CHECK (content_type IN ('video', 'image', 'web')),
-      protocol_used VARCHAR(20),
+                    CHECK (content_type IN ('video', 'image', 'web', 'timer')),
+      -- protocol_used expandido para cobrir todos os protocolos do waterfall:
+      --   'websocket'   → enviado via Socket.IO ao receiver.html na TV
+      --   'chromecast'  → enviado via Cast REST API
+      --   'upnp'        → enviado via SOAP AVTransport
+      --   'dial'        → enviado via DIAL HTTP POST
+      --   'none'        → todos os protocolos falharam
+      protocol_used VARCHAR(20)
+                    CONSTRAINT tv_command_logs_protocol_check
+                    CHECK (protocol_used IN ('websocket','chromecast','upnp','dial','none') OR protocol_used IS NULL),
       success       BOOLEAN      NOT NULL,
       error_message TEXT,
       sent_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()

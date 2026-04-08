@@ -21,6 +21,8 @@ import {
   UpdateTvDeviceSchema,
   TvDeviceParamsSchema,
   ControlTvSchema,
+  CastPayloadSchema,
+  PairDeviceParamsSchema,
 } from "./tv.schema";
 import {
   findAllTvDevices,
@@ -32,12 +34,14 @@ import {
   saveCommandLog,
   getCommandHistory,
   TV_MAX_LIMIT,
+  rotateSocketToken,
 } from "./tv.repository";
 import {
   discoverTvDevices,
   sendContentToDevice,
   sendWakeOnLan,
 } from "./tv.service";
+import { castToDevice } from "./tv.cast";
 
 // =============================================================================
 // HANDLER: listDevices
@@ -480,6 +484,228 @@ export async function getDeviceHistory(
     total: historico.length,
     limit,
     historico,
+  });
+}
+
+// =============================================================================
+// HANDLER: castToTv
+// POST /tv/cast
+// =============================================================================
+// O QUE FAZ:
+//   Envia conteúdo para uma TV usando o waterfall multi-protocolo:
+//   WebSocket → Chromecast → UPnP → DIAL.
+//
+//   Diferença em relação ao POST /tv/control:
+//   - /control: chama diretamente UPnP/DIAL (legado, sem WebSocket)
+//   - /cast: orquestrador inteligente — usa o protocolo mais adequado
+//             automaticamente, priorizando WebSocket (<100ms de latência)
+//
+//   Tipos de conteúdo suportados:
+//   - 'timer'  → Cronômetro no receiver.html (exclusivo WebSocket)
+//   - 'video'  → Reprodução de vídeo (WebSocket / UPnP)
+//   - 'image'  → Exibição de imagem (WebSocket / UPnP)
+//   - 'web'    → Página web (WebSocket / DIAL)
+//   - 'clear'  → Limpa tela (exclusivo WebSocket)
+//
+// REGISTRO NO HISTÓRICO:
+//   Salva o log independente do sucesso (falhas também ficam registradas).
+//   O campo protocol_used indica qual protocolo efetivamente entregou o conteúdo.
+// =============================================================================
+export async function castToTv(request: FastifyRequest, reply: FastifyReply) {
+  const body = CastPayloadSchema.parse(request.body);
+  const { schemaName, id: tenantId, name: tenantName } = request.tenant!;
+
+  // --- Passo 1: Busca o dispositivo ---
+  const device = await findTvDeviceById(schemaName, body.deviceId);
+
+  if (!device) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Dispositivo com ID "${body.deviceId}" não encontrado neste tenant.`,
+    });
+  }
+
+  request.log.info(
+    `[TV Cast] 📡 Enviando '${body.tipo}' para "${device.name}" (${device.ip_address}) ` +
+      `no tenant "${tenantName}"`,
+  );
+
+  // --- Passo 2: Orquestrador waterfall ---
+  const result = await castToDevice({
+    deviceId: device.id,
+    deviceName: device.name,
+    ipAddress: device.ip_address,
+    chromecastId: device.chromecast_id,
+    tenantId,
+    payload: {
+      tipo: body.tipo,
+      url: body.url,
+      duracao: body.duracao,
+      label: body.label,
+    },
+  });
+
+  // --- Passo 3: Atualiza banco se houve conteúdo de mídia ---
+  // Para 'clear', não há conteúdo a persistir.
+  if (body.tipo !== "clear" && result.success) {
+    await updateDeviceContentAndStatus(
+      schemaName,
+      device.id,
+      body.url ?? `timer:${body.duracao}s`,
+      "online",
+    );
+  } else if (!result.success) {
+    // Apenas atualiza status para offline se falha de comunicação
+    await updateDeviceContentAndStatus(
+      schemaName,
+      device.id,
+      device.current_content ?? "",
+      "offline",
+    );
+  }
+
+  // --- Passo 4: Salva no histórico ---
+  await saveCommandLog(schemaName, {
+    deviceId: device.id,
+    deviceName: device.name,
+    contentUrl: body.url ?? "",
+    contentType: body.tipo === "clear" ? "web" : body.tipo,
+    protocolUsed:
+      result.success && result.protocol !== "none" ? result.protocol : null,
+    success: result.success,
+    errorMessage: result.success ? null : result.message,
+  });
+
+  if (result.success) {
+    request.log.info(
+      `[TV Cast] ✅ "${device.name}" recebeu '${body.tipo}' via ${result.protocol}`,
+    );
+  } else {
+    request.log.warn(
+      `[TV Cast] ⚠️ Falha ao enviar '${body.tipo}' para "${device.name}": ${result.message}`,
+    );
+  }
+
+  return reply.send({
+    dispositivo: {
+      id: device.id,
+      name: device.name,
+      ip_address: device.ip_address,
+    },
+    resultado: result,
+  });
+}
+
+// =============================================================================
+// HANDLER: pairDevice
+// POST /tv/devices/:id/pair
+// =============================================================================
+// O QUE FAZ:
+//   Gera um novo socket_token para o dispositivo e retorna as informações
+//   necessárias para conectar o receiver.html na TV ao WebSocket do backend.
+//
+// CASO DE USO:
+//   1. Operador acessa o painel e clica em "Parear TV"
+//   2. POST /tv/devices/:id/pair → recebe { socketToken, receiverUrl, qrCodeData }
+//   3. Operador exibe o QR code ou a URL na TV
+//   4. TV abre o receiverUrl no browser
+//   5. receiver.html usa o socketToken para se autenticar no WebSocket
+//   6. A partir desse momento, comandos via POST /tv/cast chegam em <100ms
+//
+// SEGURANÇA:
+//   Cada chamada a /pair ROTACIONA o token (gera um novo UUID v4).
+//   O token antigo imediatamente para de funcionar.
+//   Isso permite "desparear" uma TV simplesmente gerando um novo token.
+// =============================================================================
+export async function pairDevice(request: FastifyRequest, reply: FastifyReply) {
+  const params = PairDeviceParamsSchema.parse(request.params);
+  const { schemaName, id: tenantId } = request.tenant!;
+
+  const device = await findTvDeviceById(schemaName, params.id);
+
+  if (!device) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Dispositivo com ID "${params.id}" não encontrado neste tenant.`,
+    });
+  }
+
+  // Rotaciona o token — o token antigo é invalidado imediatamente
+  const newToken = await rotateSocketToken(schemaName, params.id);
+
+  // URL que a TV deve abrir no browser para se conectar ao receiver.html
+  // Em produção, usar HTTPS + domínio real. Este é o caminho via @fastify/static.
+  const backendBase = process.env.BACKEND_PUBLIC_URL ?? "http://localhost:3000";
+  const receiverUrl =
+    `${backendBase}/static/receiver.html` +
+    `?token=${newToken}&tenantId=${tenantId}&deviceId=${params.id}`;
+
+  request.log.info(
+    `[TV Cast] 🔑 Novo token gerado para "${device.name}" — pareamento iniciado`,
+  );
+
+  return reply.send({
+    mensagem: `Token gerado. Abra o link receiver na TV "${device.name}".`,
+    dispositivo: {
+      id: device.id,
+      name: device.name,
+    },
+    socketToken: newToken,
+    receiverUrl,
+    instrucoes: [
+      "1. Copie a URL receiverUrl ou escaneie o QR code",
+      "2. Abra essa URL no navegador da TV",
+      "3. A TV aparecerá como 'conectada' no painel após alguns segundos",
+      "4. Agora use POST /tv/cast para enviar conteúdo em tempo real",
+    ],
+  });
+}
+
+// =============================================================================
+// HANDLER: getDeviceToken
+// GET /tv/devices/:id/token
+// =============================================================================
+// O QUE FAZ:
+//   Retorna o socket_token atual do dispositivo SEM rotacioná-lo.
+//   Útil para exibir o QR code novamente sem invalidar a sessão atual.
+//
+// DIFERENÇA vs /pair:
+//   /pair → Gera um NOVO token (desconecta receiver atual)
+//   /token → Retorna o token EXISTENTE (QR code de releitura)
+// =============================================================================
+export async function getDeviceToken(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const params = PairDeviceParamsSchema.parse(request.params);
+  const { schemaName, id: tenantId } = request.tenant!;
+
+  const device = await findTvDeviceById(schemaName, params.id);
+
+  if (!device) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Dispositivo com ID "${params.id}" não encontrado neste tenant.`,
+    });
+  }
+
+  const backendBase = process.env.BACKEND_PUBLIC_URL ?? "http://localhost:3000";
+  const receiverUrl =
+    `${backendBase}/static/receiver.html` +
+    `?token=${device.socket_token}&tenantId=${tenantId}&deviceId=${params.id}`;
+
+  return reply.send({
+    dispositivo: {
+      id: device.id,
+      name: device.name,
+    },
+    socketToken: device.socket_token,
+    receiverUrl,
+    aviso:
+      "Para gerar um novo token (desconectar receiver atual), use POST /tv/devices/:id/pair",
   });
 }
 

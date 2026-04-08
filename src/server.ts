@@ -17,7 +17,10 @@ import fastifyJwt from "@fastify/jwt";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyRateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
+import path from "path";
 import { disconnectPrisma } from "./core/database/prisma";
+import { initSocketServer } from "./modules/tv/tv.socket";
 import { tenantMiddleware } from "./core/middleware/tenant.middleware";
 import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
 import { estoqueRoutes } from "./modules/estoque/estoque.routes";
@@ -253,6 +256,30 @@ async function buildServer() {
   //   basta comentar a linha de registro aqui.
   // ==========================================================================
 
+  // ---------------------------------------------------------------------------
+  // PLUGIN: @fastify/static — serve arquivos estáticos da pasta /public
+  // ---------------------------------------------------------------------------
+  // O QUE FAZ:
+  //   Serve a pasta public/ como arquivos estáticos acessíveis via /static/*
+  //   Isso permite que o receiver.html seja aberto no browser da TV com:
+  //   http://servidor:3000/static/receiver.html?token=...&tenantId=...&deviceId=...
+  //
+  // POR QUE /static/ E NÃO /public/?
+  //   Convenção web: /static/ é o prefixo padrão para assets estáticos.
+  //   Evita colisão com rotas de API que possam começar com os mesmos nomes.
+  //
+  // SEGURANÇA: @fastify/static não permite path traversal (../../etc/passwd)
+  //   O plugin normaliza caminhos e confina ao `root` especificado.
+  // ---------------------------------------------------------------------------
+  await app.register(fastifyStatic, {
+    root: path.join(__dirname, "../public"),
+    prefix: "/static/",
+    // Cache de 1 hora para assets que não mudam frequentemente.
+    // receiver.html muda raramente — cache melhora a performance na TV.
+    cacheControl: true,
+    maxAge: "1h",
+  });
+
   // Módulo de Autenticação (rotas públicas — sem tenantMiddleware)
   await app.register(authRoutes, { prefix: "/auth" });
 
@@ -343,6 +370,34 @@ async function start() {
     // Necessário para funcionar dentro de containers Docker.
     // Em desenvolvimento, 'localhost' ou '127.0.0.1' também funciona.
 
+    // -------------------------------------------------------------------------
+    // INITIIALIZAÇÃO DO SERVIDOR SOCKET.IO
+    // -------------------------------------------------------------------------
+    // O QUE FAZ:
+    //   Anexa o servidor WebSocket ao mesmo http.Server do Fastify.
+    //   Después do app.listen() o httpServer está garantidamente aberto.
+    //   initSocketServer() configura: namespaces /cast/:tenantId, auth middleware,
+    //   in-memory activeConnections Map, e todos os eventos socket.io.
+    //
+    // POR QUE DEPOIS DO listen() E NÃO ANTES?
+    //   O socket.io se anexa ao httpServer nativo (app.server).
+    //   Antes do listen(), o httpServer ainda não está inicializado pelo Fastify.
+    //   Chamar initSocketServer() antes do listen() jogaria um erro.
+    //
+    // POR QUE PASSAR corsOrigin?
+    //   Socket.IO tem seu próprio sistema de CORS independente do @fastify/cors.
+    //   Em produção, restringir ao domínio real do frontend aumenta a segurança.
+    //   Em desenvolvimento, `true` aceita qualquer origem.
+    // -------------------------------------------------------------------------
+    const corsOrigin =
+      process.env.NODE_ENV === "production"
+        ? (process.env.FRONTEND_URL ?? false)
+        : true;
+    initSocketServer(app.server, corsOrigin);
+    console.log(
+      `🔌 WebSocket (Socket.IO) ativo em ws://localhost:${port}/cast/:tenantId`,
+    );
+
     console.log(`\n🚀 Servidor rodando em http://localhost:${port}`);
     console.log(`📋 Rotas disponíveis:`);
     console.log(`   GET  /health              → Health check (público)`);
@@ -398,17 +453,39 @@ async function start() {
       `   PATCH  /admin/tenants/:id/modules       → Ligar/desligar módulo`,
     );
     console.log(`\n   --- MÓDULO: TV / DIGITAL SIGNAGE ---`);
-    console.log(`   GET    /tv/devices              → Listar TVs do tenant`);
-    console.log(`   GET    /tv/devices/:id          → Detalhes de uma TV`);
     console.log(
-      `   POST   /tv/devices              → Registrar TV (máx 5/tenant)`,
+      `   GET    /tv/devices                    → Listar TVs do tenant`,
     );
-    console.log(`   PATCH  /tv/devices/:id          → Atualizar TV`);
-    console.log(`   DELETE /tv/devices/:id          → Remover TV`);
     console.log(
-      `   POST   /tv/control              → Enviar conteúdo via UPnP/DIAL`,
+      `   GET    /tv/devices/:id                → Detalhes de uma TV`,
     );
-    console.log(`   GET    /tv/discover             → Varredura SSDP na rede`);
+    console.log(
+      `   POST   /tv/devices                    → Registrar TV (máx 5/tenant)`,
+    );
+    console.log(`   PATCH  /tv/devices/:id                → Atualizar TV`);
+    console.log(`   DELETE /tv/devices/:id                → Remover TV`);
+    console.log(
+      `   POST   /tv/control                    → Enviar conteúdo via UPnP/DIAL (legado)`,
+    );
+    console.log(
+      `   POST   /tv/cast                       → Enviar conteúdo (waterfall multi-protocolo)`,
+    );
+    console.log(
+      `   POST   /tv/devices/:id/pair           → Gerar token + URL receiver.html`,
+    );
+    console.log(
+      `   GET    /tv/devices/:id/token          → Ver token atual (sem rotacionar)`,
+    );
+    console.log(`   POST   /tv/devices/:id/wol            → Wake-on-LAN`);
+    console.log(
+      `   GET    /tv/devices/:id/historico      → Histórico de comandos`,
+    );
+    console.log(
+      `   GET    /tv/discover                   → Varredura SSDP na rede`,
+    );
+    console.log(
+      `   GET    /static/receiver.html          → App para o browser da TV`,
+    );
     if (process.env.NODE_ENV === "development") {
       console.log(`\n   --- ROTAS DE DEV ---`);
       console.log(`   POST /dev/token                → Gerar JWT de teste`);

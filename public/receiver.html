@@ -1,0 +1,616 @@
+<!doctype html>
+<!--
+=================================================================================
+  public/receiver.html
+=================================================================================
+  O QUE É:
+    Aplicativo HTML5 puro que roda no browser da TV (Tizen, WebOS, Android TV).
+    Funciona como "receptor" de comandos enviados pelo painel de controle.
+
+  COMO FUNCIONA:
+    1. Operador clica em "Parear TV" no painel → POST /tv/devices/:id/pair
+    2. Backend retorna uma URL: /static/receiver.html?token=...&tenantId=...&deviceId=...
+    3. Operador abre essa URL no browser da TV (digitação, QR code, ADB, etc.)
+    4. receiver.html lê os parâmetros da URL e conecta ao WebSocket do backend
+    5. Quando conectado, o painel mostra a TV como "online via WebSocket"
+    6. Comandos POST /tv/cast chegam em <100ms via evento socket.io
+
+  EVENTOS SOCKET.IO RECEBIDOS:
+    cast:timer  → { tipo:'timer', duracao:300, label:'Fila de Espera' }
+                  Exibe cronômetro regressivo em fullscreen
+    cast:media  → { tipo:'video'|'image', url:'http://...' }
+                  Exibe vídeo ou imagem em fullscreen
+    cast:web    → { tipo:'web', url:'http://...' }
+                  Abre URL em iframe fullscreen
+    cast:clear  → {}
+                  Limpa a tela, volta ao estado de espera
+
+  POR QUE HTML PURO (SEM REACT/VUE)?
+    TVs têm browsers limitados (Chromium antigo, WebKit desatualizado).
+    HTML+JS puro sem bundler garante compatibilidade máxima.
+    Sem dependências npm = sem falhas de compatibilidade.
+
+  POR QUE O SOCKET.IO VIA CDN (unpkg)?
+    O receiver.html é servido via @fastify/static como arquivo estático.
+    Não tem processo de build. A TV precisa de um arquivo .html único.
+    O CDN do unpkg serve a versão correta do socket.io-client.
+
+  SEGURANÇA:
+    - O token é lido da URL (query param) — nunca hardcodado
+    - O backend valida o token via findDeviceBySocketToken antes de aceitar
+    - Nenhuma ação destrutiva é executável pelo receiver (só exibe conteúdo)
+    - O receiver NÃO tem acesso ao banco de dados — é 100% passivo
+=================================================================================
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TV Receiver</title>
+    <style>
+      /* =========================================================================
+       RESET E BASE
+       Garante que a página ocupe a tela inteira da TV sem barras de scroll.
+       background-color: black para que nada "vaze" nas bordas do conteúdo.
+    ========================================================================= */
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #000;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+
+      /* =========================================================================
+       TELA DE ESPERA (estado inicial)
+       Exibida quando receiver.html está conectado mas aguardando um comando.
+       Mostra o nome do dispositivo e o status da conexão.
+    ========================================================================= */
+      #idle-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #e2e8f0;
+      }
+
+      #idle-screen .logo {
+        font-size: clamp(2rem, 5vw, 4rem);
+        font-weight: 700;
+        color: #60a5fa;
+        margin-bottom: 1rem;
+        letter-spacing: -1px;
+      }
+
+      #idle-screen .device-name {
+        font-size: clamp(1rem, 3vw, 2rem);
+        color: #94a3b8;
+        margin-bottom: 2rem;
+      }
+
+      #connection-status {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: clamp(0.875rem, 2vw, 1.25rem);
+      }
+
+      .status-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background-color: #f59e0b; /* amarelo = conectando */
+        animation: pulse 1.5s infinite;
+        flex-shrink: 0;
+      }
+
+      .status-dot.connected {
+        background-color: #22c55e;
+        animation: none;
+      }
+      .status-dot.error {
+        background-color: #ef4444;
+        animation: none;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(0.85);
+        }
+      }
+
+      #reconnect-countdown {
+        margin-top: 1rem;
+        font-size: 0.875rem;
+        color: #64748b;
+      }
+
+      /* =========================================================================
+       TIMER (cronômetro regressivo)
+       Fullscreen com número grande no centro e label acima.
+    ========================================================================= */
+      #timer-screen {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        background-color: #0c0c0c;
+        color: #fff;
+      }
+
+      #timer-label {
+        font-size: clamp(1.5rem, 4vw, 3rem);
+        color: #94a3b8;
+        margin-bottom: 2rem;
+        text-align: center;
+        padding: 0 1rem;
+      }
+
+      #timer-display {
+        font-size: clamp(6rem, 22vw, 18rem);
+        font-weight: 800;
+        font-variant-numeric: tabular-nums; /* evita pulo de largura nos dígitos */
+        letter-spacing: -4px;
+        line-height: 1;
+        color: #f1f5f9;
+        text-shadow: 0 0 60px rgba(96, 165, 250, 0.4);
+      }
+
+      #timer-display.warn {
+        color: #f59e0b;
+        text-shadow: 0 0 60px rgba(245, 158, 11, 0.5);
+      }
+      #timer-display.alert {
+        color: #ef4444;
+        text-shadow: 0 0 60px rgba(239, 68, 68, 0.6);
+      }
+
+      /* =========================================================================
+       MÍDIA (video/image)
+    ========================================================================= */
+      #media-screen {
+        display: none;
+        width: 100%;
+        height: 100%;
+        background-color: #000;
+      }
+
+      #media-video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      #media-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      /* =========================================================================
+       WEB (iframe)
+    ========================================================================= */
+      #web-screen {
+        display: none;
+        width: 100%;
+        height: 100%;
+        background-color: #fff;
+      }
+
+      #web-iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+
+      /* =========================================================================
+       ERRO (exibido quando perde conexão definitivamente)
+    ========================================================================= */
+      #error-overlay {
+        display: none;
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        background: rgba(239, 68, 68, 0.9);
+        color: #fff;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        max-width: 360px;
+        z-index: 9999;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Tela de espera -->
+    <div id="idle-screen">
+      <div class="logo">&#x1F4FA; SistemaTV</div>
+      <div class="device-name" id="device-name-display">Carregando...</div>
+      <div id="connection-status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Conectando ao servidor...</span>
+      </div>
+      <div id="reconnect-countdown"></div>
+    </div>
+
+    <!-- Tela de timer -->
+    <div id="timer-screen">
+      <div id="timer-label">Aguarde</div>
+      <div id="timer-display">00:00</div>
+    </div>
+
+    <!-- Tela de mídia (video ou imagem) -->
+    <div id="media-screen">
+      <video id="media-video" autoplay loop muted playsinline></video>
+      <img id="media-image" alt="" style="display: none" />
+    </div>
+
+    <!-- Tela web (iframe fullscreen) -->
+    <div id="web-screen">
+      <iframe
+        id="web-iframe"
+        sandbox="allow-scripts allow-same-origin allow-forms"
+      ></iframe>
+    </div>
+
+    <!-- Overlay de erro de rede -->
+    <div id="error-overlay"></div>
+
+    <!--
+    Socket.IO Client via CDN (unpkg).
+    Versão fixada: 4.7.5 (compatível com socket.io@4.8.3 no backend).
+    POR QUE CDN E NÃO NPM?
+      Este arquivo é servido como HTML estático — não tem processo de build.
+      O CDN garante que o browser da TV baixe a versão correta sem npm install.
+  -->
+    <script src="https://unpkg.com/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+
+    <script>
+      // ==========================================================================
+      // INICIALIZAÇÃO — lê parâmetros da URL
+      // ==========================================================================
+      // Os parâmetros são inseridos na URL pelo backend quando gera o receiverUrl:
+      //   /static/receiver.html?token=UUID&tenantId=UUID&deviceId=UUID
+      //
+      // POR QUE QUERY PARAMS E NÃO HASH (#)?
+      //   Hash não é enviado ao servidor — mas aqui lemos no cliente, então
+      //   query params e hash funcionariam. Query params são mais amigáveis
+      //   para exibir em QR codes e interfaces.
+      // ==========================================================================
+      const params = new URLSearchParams(window.location.search);
+      const TOKEN = params.get("token");
+      const TENANT_ID = params.get("tenantId");
+      const DEVICE_ID = params.get("deviceId");
+
+      // URL base do backend: onde o socket.io server está rodando.
+      // Em produção, usar URL absoluta (ex: 'https://api.meusite.com').
+      // Em desenvolvimento, usa a mesma origem da página (servida pelo Fastify).
+      const BACKEND_URL = window.location.origin;
+
+      // Elementos do DOM
+      const idleScreen = document.getElementById("idle-screen");
+      const timerScreen = document.getElementById("timer-screen");
+      const mediaScreen = document.getElementById("media-screen");
+      const webScreen = document.getElementById("web-screen");
+      const errorOverlay = document.getElementById("error-overlay");
+      const statusDot = document.getElementById("status-dot");
+      const statusText = document.getElementById("status-text");
+      const deviceDisplay = document.getElementById("device-name-display");
+      const timerLabel = document.getElementById("timer-label");
+      const timerDisplay = document.getElementById("timer-display");
+      const mediaVideo = document.getElementById("media-video");
+      const mediaImage = document.getElementById("media-image");
+      const webIframe = document.getElementById("web-iframe");
+      const reconnectEl = document.getElementById("reconnect-countdown");
+
+      // Estado do timer (referência ao setInterval ativo)
+      let timerInterval = null;
+
+      // ==========================================================================
+      // VALIDAÇÃO DOS PARÂMETROS
+      // ==========================================================================
+      if (!TOKEN || !TENANT_ID || !DEVICE_ID) {
+        setStatus(
+          "error",
+          "Parâmetros inválidos na URL. Use o link gerado pelo painel.",
+        );
+        showError("URL inválida: token, tenantId ou deviceId ausente.");
+      } else {
+        initSocket();
+      }
+
+      // ==========================================================================
+      // CONEXÃO WEBSOCKET
+      // ==========================================================================
+      function initSocket() {
+        // Namespace dinâmico por tenant — isola conexões entre clientes diferentes
+        const namespace = `/cast/${TENANT_ID}`;
+
+        const socket = io(BACKEND_URL + namespace, {
+          auth: {
+            // Token que identifica e autentica ESTE dispositivo no namespace do tenant.
+            // O backend valida em tv.socket.ts: findDeviceBySocketToken(schemaName, token)
+            token: TOKEN,
+            deviceId: DEVICE_ID,
+          },
+          // Configurações de reconexão automática
+          reconnection: true,
+          reconnectionDelay: 2000,
+          reconnectionDelayMax: 30000,
+          reconnectionAttempts: Infinity, // Tenta para sempre — TV deve permanecer conectada
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: connect — conexão estabelecida com sucesso
+        // -----------------------------------------------------------------------
+        socket.on("connect", function () {
+          setStatus("connected", "Conectado ao servidor");
+          hideError();
+          reconnectEl.textContent = "";
+
+          // Anuncia ao backend que este dispositivo está pronto para receber comandos.
+          // O backend registra no activeConnections Map e confirma com cast:paired.
+          socket.emit("tv:ready", {
+            deviceId: DEVICE_ID,
+            userAgent: navigator.userAgent,
+          });
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: cast:paired — backend confirmou o pareamento
+        // -----------------------------------------------------------------------
+        socket.on("cast:paired", function (data) {
+          if (data && data.deviceName) {
+            deviceDisplay.textContent = data.deviceName;
+          }
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: cast:timer — exibe cronômetro regressivo
+        // Payload: { tipo:'timer', duracao:300, label:'Fila de Espera' }
+        // -----------------------------------------------------------------------
+        socket.on("cast:timer", function (payload) {
+          showTimer(payload.duracao || 60, payload.label || "Aguarde");
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: cast:media — exibe vídeo ou imagem em fullscreen
+        // Payload: { tipo:'video'|'image', url:'http://...' }
+        // -----------------------------------------------------------------------
+        socket.on("cast:media", function (payload) {
+          if (payload.tipo === "video") {
+            showVideo(payload.url);
+          } else {
+            showImage(payload.url);
+          }
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: cast:web — abre URL em iframe fullscreen
+        // Payload: { tipo:'web', url:'http://...' }
+        // -----------------------------------------------------------------------
+        socket.on("cast:web", function (payload) {
+          showWeb(payload.url);
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: cast:clear — limpa tela e volta ao estado de espera
+        // -----------------------------------------------------------------------
+        socket.on("cast:clear", function () {
+          clearDisplay();
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: disconnect — WebSocket perdeu conexão
+        // -----------------------------------------------------------------------
+        socket.on("disconnect", function (reason) {
+          setStatus("connecting", "Conexão perdida. Reconectando...");
+          // Não esconde o conteúdo atual — a TV pode estar exibindo algo
+          // importante e não deve piscar ao reconectar.
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: connect_error — falha específica de conexão
+        // -----------------------------------------------------------------------
+        socket.on("connect_error", function (err) {
+          setStatus("error", "Erro de conexão: " + err.message);
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: reconnect_attempt — tentativas de reconexão
+        // -----------------------------------------------------------------------
+        socket.io.on("reconnect_attempt", function (attempt) {
+          reconnectEl.textContent =
+            "Tentativa de reconexão #" + attempt + "...";
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: reconnect — reconexão bem-sucedida
+        // -----------------------------------------------------------------------
+        socket.io.on("reconnect", function () {
+          reconnectEl.textContent = "";
+        });
+      }
+
+      // ==========================================================================
+      // FUNÇÕES DE EXIBIÇÃO
+      // ==========================================================================
+
+      /**
+       * showTimer
+       * Exibe cronômetro regressivo em fullscreen.
+       * @param {number} secondsTotal - Duração em segundos
+       * @param {string} label        - Texto exibido acima do timer
+       *
+       * POR QUE USAR setInterval E NÃO requestAnimationFrame?
+       *   setInterval de 1000ms é suficiente para um counter de segundos.
+       *   requestAnimationFrame seria desnecessariamente frequente para este caso.
+       *   O Date-based sync garante que o timer não derive mesmo se o intervalfora
+       *   suspenso pelo browser (tab em background, TV em modo de economia).
+       */
+      function showTimer(secondsTotal, label) {
+        // Para timer anterior se existir
+        stopTimer();
+
+        // Configura a tela
+        timerLabel.textContent = label;
+        switchScreen("timer");
+
+        let remaining = secondsTotal;
+        const startedAt = Date.now();
+
+        function tick() {
+          // Calcula baseado no timestamp real — evita derive acumulado
+          const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+          remaining = Math.max(0, secondsTotal - elapsed);
+
+          timerDisplay.textContent = formatTime(remaining);
+
+          // Alerta visual nos últimos 30s e 10s
+          timerDisplay.classList.remove("warn", "alert");
+          if (remaining <= 10) timerDisplay.classList.add("alert");
+          else if (remaining <= 30) timerDisplay.classList.add("warn");
+
+          if (remaining === 0) {
+            stopTimer();
+            // Aguarda 3s mostrando "00:00" e volta para idle
+            setTimeout(clearDisplay, 3000);
+          }
+        }
+
+        tick(); // Exibe imediatamente sem esperar 1s
+        timerInterval = setInterval(tick, 1000);
+      }
+
+      function stopTimer() {
+        if (timerInterval !== null) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+
+      /**
+       * formatTime — converte segundos em MM:SS ou HH:MM:SS
+       * Ex: 3665 → "1:01:05"  |  125 → "02:05"
+       */
+      function formatTime(secs) {
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = secs % 60;
+        const mm = String(m).padStart(2, "0");
+        const ss = String(s).padStart(2, "0");
+        return h > 0 ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+      }
+
+      /**
+       * showVideo — exibe vídeo em fullscreen
+       */
+      function showVideo(url) {
+        stopTimer();
+        mediaImage.style.display = "none";
+        mediaVideo.style.display = "block";
+        mediaVideo.src = url;
+        mediaVideo.play().catch(function (e) {
+          // Browsers exigem interação do usuário para autoplay com som.
+          // Como a TV não tem usuário interagindo, o vídeo pode não tocar com áudio.
+          // muted=true no elemento garante que toque sem som, o que é aceitável
+          // para displays institucionais.
+          console.warn("[receiver] autoplay bloqueado:", e.message);
+        });
+        switchScreen("media");
+      }
+
+      /**
+       * showImage — exibe imagem em fullscreen
+       */
+      function showImage(url) {
+        stopTimer();
+        mediaVideo.style.display = "none";
+        mediaVideo.src = "";
+        mediaImage.src = url;
+        mediaImage.style.display = "block";
+        switchScreen("media");
+      }
+
+      /**
+       * showWeb — abre URL em iframe fullscreen
+       */
+      function showWeb(url) {
+        stopTimer();
+        webIframe.src = url;
+        switchScreen("web");
+      }
+
+      /**
+       * clearDisplay — volta ao estado de espera (tela idle)
+       */
+      function clearDisplay() {
+        stopTimer();
+        mediaVideo.src = "";
+        webIframe.src = "about:blank";
+        switchScreen("idle");
+      }
+
+      // ==========================================================================
+      // HELPERS DE UI
+      // ==========================================================================
+
+      /**
+       * switchScreen — alterna entre as telas mostrando apenas a selecionada.
+       * @param {'idle'|'timer'|'media'|'web'} name
+       */
+      function switchScreen(name) {
+        idleScreen.style.display = name === "idle" ? "flex" : "none";
+        timerScreen.style.display = name === "timer" ? "flex" : "none";
+        mediaScreen.style.display = name === "media" ? "block" : "none";
+        webScreen.style.display = name === "web" ? "block" : "none";
+      }
+
+      /**
+       * setStatus — atualiza indicador de conexão na tela idle.
+       * @param {'connecting'|'connected'|'error'} state
+       * @param {string} text
+       */
+      function setStatus(state, text) {
+        statusDot.className = "status-dot";
+        if (state === "connected") statusDot.classList.add("connected");
+        if (state === "error") statusDot.classList.add("error");
+        statusText.textContent = text;
+      }
+
+      function showError(msg) {
+        errorOverlay.textContent = "⚠️ " + msg;
+        errorOverlay.style.display = "block";
+        setTimeout(function () {
+          errorOverlay.style.display = "none";
+        }, 8000);
+      }
+
+      function hideError() {
+        errorOverlay.style.display = "none";
+      }
+    </script>
+  </body>
+</html>
