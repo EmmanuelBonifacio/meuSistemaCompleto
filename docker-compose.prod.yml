@@ -82,13 +82,41 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    # envsubst substitui ${DOMAIN} no template e gera o nginx.conf final
+    command: >
+      /bin/sh -c "
+        envsubst '$$DOMAIN' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf &&
+        nginx -g 'daemon off;'
+      "
     volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+      - letsencrypt_data:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
       - uploads_data:/uploads:ro
     depends_on:
       - backend
       - frontend
+    networks:
+      - internal
+
+  # Certbot: renova o certificado automaticamente a cada 12h
+  # (Let's Encrypt só renova se faltar < 30 dias para expirar)
+  certbot:
+    image: certbot/certbot
+    container_name: certbot_prod
+    volumes:
+      - letsencrypt_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "
+        trap exit TERM;
+        while :; do
+          certbot renew;
+          sleep 12h & wait $${!};
+        done
+      "
     networks:
       - internal
 
@@ -99,3 +127,5 @@ networks:
 volumes:
   postgres_prod_data:
   uploads_data:
+  letsencrypt_data:
+  certbot_www:
