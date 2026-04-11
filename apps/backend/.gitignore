@@ -1,0 +1,25 @@
+# Dependências
+node_modules/
+
+# Build compilado
+dist/
+
+# Variáveis de ambiente (NUNCA commitar — contém senhas e segredos!)
+.env
+.env.local
+.env.production
+
+# Pasta do Prisma com o client gerado (gerado automaticamente via `prisma generate`)
+node_modules/.prisma/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/

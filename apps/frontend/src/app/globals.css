@@ -1,0 +1,123 @@
+/* =============================================================================
+   src/app/globals.css
+   =============================================================================
+   O QUE FAZ:
+     Define as variáveis CSS do design system, usadas pelo Tailwind para
+     gerar cores como bg-primary, text-foreground, border-border, etc.
+     Cada variável é um valor em "H S L" (sem vírgulas) para que o Tailwind
+     possa interpolar a opacidade: hsl(var(--primary) / 0.5)
+   ============================================================================= */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Tema Claro (padrão) ─────────────────────────────────────────────────── */
+:root {
+  /* Fontes */
+  --font-inter: "Inter", sans-serif;
+
+  /* Raio padrão de bordas */
+  --radius: 0.5rem;
+
+  /* Background e Foreground da página */
+  --background: 0 0% 100%;
+  --foreground: 224 71.4% 4.1%;
+
+  /* Cartões */
+  --card: 0 0% 100%;
+  --card-foreground: 224 71.4% 4.1%;
+
+  /* Popovers / Dropdowns */
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 71.4% 4.1%;
+
+  /* Cor primária (botões, links, destaques) */
+  --primary: 220.9 39.3% 11%;
+  --primary-foreground: 210 20% 98%;
+
+  /* Cor secundária */
+  --secondary: 220 14.3% 95.9%;
+  --secondary-foreground: 220.9 39.3% 11%;
+
+  /* Muted — textos e fundos apagados */
+  --muted: 220 14.3% 95.9%;
+  --muted-foreground: 220 8.9% 46.1%;
+
+  /* Accent — hover states, seleções */
+  --accent: 220 14.3% 95.9%;
+  --accent-foreground: 220.9 39.3% 11%;
+
+  /* Destructive — erros, exclusões */
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 20% 98%;
+
+  /* Bordas e inputs */
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 224 71.4% 4.1%;
+
+  /* ─── Sidebar ────────────────────────────────────────────────────────────── */
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-border: 220 13% 91%;
+}
+
+/* ─── Tema Escuro ─────────────────────────────────────────────────────────── */
+.dark {
+  --background: 224 71.4% 4.1%;
+  --foreground: 210 20% 98%;
+
+  --card: 224 71.4% 4.1%;
+  --card-foreground: 210 20% 98%;
+
+  --popover: 224 71.4% 4.1%;
+  --popover-foreground: 210 20% 98%;
+
+  --primary: 210 20% 98%;
+  --primary-foreground: 220.9 39.3% 11%;
+
+  --secondary: 215 27.9% 16.9%;
+  --secondary-foreground: 210 20% 98%;
+
+  --muted: 215 27.9% 16.9%;
+  --muted-foreground: 217.9 10.6% 64.9%;
+
+  --accent: 215 27.9% 16.9%;
+  --accent-foreground: 210 20% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 20% 98%;
+
+  --border: 215 27.9% 16.9%;
+  --input: 215 27.9% 16.9%;
+  --ring: 216 12.2% 83.9%;
+
+  --sidebar: 240 5.9% 10%;
+  --sidebar-foreground: 240 4.8% 95.9%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-border: 240 3.7% 15.9%;
+}
+
+/* ─── Reset base ──────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Scroolbar sutil (Webkit) */
+  ::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+}

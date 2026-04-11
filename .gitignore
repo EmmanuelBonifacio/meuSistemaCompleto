@@ -1,25 +1,49 @@
-# Dependências
-node_modules/
+# =============================================================================
+# .gitignore  (monorepo root)
+# =============================================================================
 
-# Build compilado
-dist/
-
-# Variáveis de ambiente (NUNCA commitar — contém senhas e segredos!)
+# ─── Variáveis de ambiente (NUNCA comitar!) ──────────────────────────────────
 .env
 .env.local
 .env.production
 
-# Pasta do Prisma com o client gerado (gerado automaticamente via `prisma generate`)
-node_modules/.prisma/
+# ─── Dependências ────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
 
-# Logs
+# ─── Build outputs ───────────────────────────────────────────────────────────
+dist/
+**/dist/
+.next/
+**/.next/
+out/
+**/out/
+
+# ─── Uploads de usuários (gerenciados via volume Docker em produção) ─────────
+uploads/
+
+# ─── Prisma ──────────────────────────────────────────────────────────────────
+# O cliente gerado é reproduzível via `prisma generate` — não comitar
+apps/backend/node_modules/.prisma/
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Sistema operacional
+# ─── Certificados SSL locais ─────────────────────────────────────────────────
+docker/nginx/certs/*.pem
+docker/nginx/certs/*.key
+docker/nginx/certs/*.crt
+
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+.vscode/
+*.swp
+*.swo
 
-# Editor
-.vscode/settings.json
-.idea/
+# ─── TypeScript ──────────────────────────────────────────────────────────────
+*.tsbuildinfo
