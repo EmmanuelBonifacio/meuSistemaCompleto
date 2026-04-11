@@ -7,6 +7,9 @@
 .env.local
 .env.production
 
+# ─── Certificados SSL (gerados pelo scripts/setup.sh) ────────────────────────
+docker/nginx/certs/*.pem
+
 # ─── Dependências ────────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
