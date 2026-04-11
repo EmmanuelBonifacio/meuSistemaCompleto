@@ -172,9 +172,10 @@ export const CastPayloadSchema = z
       .string()
       .uuid("deviceId deve ser um UUID válido — consulte GET /tv/devices"),
 
-    tipo: z.enum(["timer", "video", "image", "web", "clear"], {
+    tipo: z.enum(["timer", "video", "image", "web", "clear", "screen-share"], {
       errorMap: () => ({
-        message: "tipo deve ser: 'timer', 'video', 'image', 'web' ou 'clear'",
+        message:
+          "tipo deve ser: 'timer', 'video', 'image', 'web', 'clear' ou 'screen-share'",
       }),
     }),
 
@@ -201,6 +202,7 @@ export const CastPayloadSchema = z
       if (data.tipo === "timer" && !data.duracao) return false;
       if (["video", "image", "web"].includes(data.tipo) && !data.url)
         return false;
+      // screen-share e clear não exigem url nem duracao
       return true;
     },
     {

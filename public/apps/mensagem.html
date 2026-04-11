@@ -1,0 +1,84 @@
+<!doctype html>
+<!--
+  public/apps/mensagem.html
+  App de Mensagem em Tela Cheia para Digital Signage.
+  Parâmetros URL: ?texto=Bem+vindos&bg=%23111827&cor=%23ffffff&subtitulo=Segunda+linha
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mensagem</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 4rem;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+      #texto {
+        font-size: clamp(4rem, 12vw, 10rem);
+        font-weight: 900;
+        line-height: 1.1;
+        word-break: break-word;
+        /* Animação suave de entrada */
+        animation: fadeIn 1s ease forwards;
+      }
+      #subtitulo {
+        font-size: clamp(1.5rem, 4vw, 3rem);
+        font-weight: 400;
+        margin-top: 2rem;
+        opacity: 0.7;
+        animation: fadeIn 1.5s ease forwards;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="texto">Bem-vindos</div>
+    <div id="subtitulo" hidden></div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const texto = params.get("texto") || "Bem-vindos";
+      const subtitulo = params.get("subtitulo") || "";
+      const bg = params.get("bg") || "#111827";
+      const cor = params.get("cor") || "#ffffff";
+
+      // Aplica cores no body a partir dos parâmetros (valores vindos da URL já decodificados)
+      document.body.style.background = bg;
+      document.body.style.color = cor;
+
+      document.getElementById("texto").textContent = texto;
+
+      if (subtitulo) {
+        const el = document.getElementById("subtitulo");
+        el.textContent = subtitulo;
+        el.hidden = false;
+      }
+    </script>
+  </body>
+</html>

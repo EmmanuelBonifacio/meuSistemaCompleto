@@ -305,7 +305,7 @@ export interface TvCommandLog {
   device_id: string;
   device_name: string;
   content_url: string;
-  content_type: "video" | "image" | "web";
+  content_type: "video" | "image" | "web" | "screen-share";
   protocol_used: string | null;
   success: boolean;
   error_message: string | null;
@@ -319,8 +319,8 @@ export interface SaveCommandLogInput {
   deviceId: string;
   deviceName: string;
   contentUrl: string;
-  // 'timer' adicionado para suporte ao cronômetro via WebSocket
-  contentType: "video" | "image" | "web" | "timer";
+  // 'timer' e 'screen-share' adicionados para suporte via WebSocket
+  contentType: "video" | "image" | "web" | "timer" | "screen-share";
   // Expandido: 'websocket' | 'chromecast' | 'upnp' | 'dial' | 'none'
   protocolUsed: "websocket" | "chromecast" | "upnp" | "dial" | "none" | null;
   success: boolean;

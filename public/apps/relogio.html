@@ -1,0 +1,100 @@
+<!doctype html>
+<!--
+  public/apps/relogio.html
+  App de Relógio Digital em Tela Cheia para Digital Signage.
+  Parâmetros URL: ?cor=#60a5fa&bg=#0f172a&formato=24 (ou 12)
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Relógio</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: "Segoe UI", "Courier New", monospace;
+      }
+      #hora {
+        font-size: clamp(12rem, 30vw, 24rem);
+        font-weight: 900;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.04em;
+      }
+      #segundos {
+        font-size: clamp(4rem, 8vw, 8rem);
+        font-weight: 300;
+        opacity: 0.5;
+        margin-top: 0.5rem;
+        font-variant-numeric: tabular-nums;
+      }
+      #data {
+        font-size: clamp(1.5rem, 3vw, 2.5rem);
+        font-weight: 400;
+        opacity: 0.6;
+        margin-top: 2rem;
+        text-transform: capitalize;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hora">00:00</div>
+    <div id="segundos">00</div>
+    <div id="data"></div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const cor = params.get("cor") || "#60a5fa";
+      const bg = params.get("bg") || "#0f172a";
+      const formato = params.get("formato") === "12" ? "12" : "24";
+
+      document.body.style.background = bg;
+      document.body.style.color = cor;
+
+      const horaEl = document.getElementById("hora");
+      const segsEl = document.getElementById("segundos");
+      const dataEl = document.getElementById("data");
+
+      function tick() {
+        const now = new Date();
+        const h = now.getHours();
+        const m = now.getMinutes();
+        const s = now.getSeconds();
+
+        if (formato === "12") {
+          const periodo = h >= 12 ? "PM" : "AM";
+          const h12 = h % 12 || 12;
+          horaEl.textContent = `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${periodo}`;
+        } else {
+          horaEl.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        }
+
+        segsEl.textContent = String(s).padStart(2, "0");
+
+        dataEl.textContent = now.toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        });
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    </script>
+  </body>
+</html>

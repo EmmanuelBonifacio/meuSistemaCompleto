@@ -6,17 +6,29 @@
 //   Conecta cada URL ao seu handler no controller.
 //
 // PROTEÇÃO EM DUAS CAMADAS (preHandler array):
-//   1. tenantMiddleware  → Quem você é? (autenticação + carrega request.tenant)
+//   1. tenantMiddleware   → Quem você é? (autenticação + carrega request.tenant)
 //   2. requireModule('tv') → Você tem acesso a este módulo? (autorização por module)
 //
 // ROTAS REGISTRADAS (todas com prefixo /tv via server.ts):
-//   GET    /tv/devices         → listar todas as TVs do tenant
-//   GET    /tv/devices/:id     → detalhe de uma TV
-//   POST   /tv/devices         → registrar nova TV (limite: 5 por tenant)
-//   PATCH  /tv/devices/:id     → atualizar dados de uma TV
-//   DELETE /tv/devices/:id     → remover TV (libera slot)
-//   POST   /tv/control         → enviar conteúdo/URL para uma TV (UPnP/DIAL)
-//   GET    /tv/discover        → varredura SSDP na rede local
+//   GET    /tv/devices              → listar todas as TVs do tenant
+//   GET    /tv/devices/:id          → detalhe de uma TV
+//   POST   /tv/devices              → registrar nova TV (limite: 5 por tenant)
+//   PATCH  /tv/devices/:id          → atualizar dados de uma TV
+//   DELETE /tv/devices/:id          → remover TV (libera slot)
+//   POST   /tv/control              → enviar conteúdo via UPnP/DIAL (legado)
+//   POST   /tv/cast                 → enviar conteúdo waterfall multi-protocolo
+//   GET    /tv/discover             → varredura SSDP na rede local
+//   POST   /tv/devices/:id/pair     → gerar token + URL receiver.html
+//   GET    /tv/devices/:id/token    → ver token atual (sem rotacionar)
+//   POST   /tv/devices/:id/wol      → Wake-on-LAN
+//   GET    /tv/devices/:id/historico → histórico de comandos
+//   --- NOVAS ROTAS DE MÍDIA ---
+//   GET    /tv/media                → listar arquivos de mídia do tenant
+//   GET    /tv/media/:mediaId       → metadados de um arquivo específico
+//   POST   /tv/media/upload         → upload de vídeo ou imagem
+//   DELETE /tv/media/:mediaId       → remover arquivo
+//   --- APPS DE DIGITAL SIGNAGE ---
+//   GET    /tv/apps                 → listar apps disponíveis
 // =============================================================================
 
 import { FastifyInstance } from "fastify";
@@ -36,6 +48,13 @@ import {
   pairDevice,
   getDeviceToken,
 } from "./tv.controller";
+import {
+  listMedia,
+  uploadMedia,
+  removeMedia,
+  getMedia,
+} from "./tv.media.controller";
+import { listApps } from "./tv.apps";
 
 // Middleware de acesso ao módulo TV (reutilizável como preHandler)
 // requireModule('tv') retorna uma função que verifica se o tenant tem
@@ -49,78 +68,45 @@ export async function tvRoutes(fastify: FastifyInstance) {
   // --------------------------------------------------------------------------
   // GET /tv/devices
   // --------------------------------------------------------------------------
-  // Lista todos os dispositivos TV cadastrados pelo tenant.
-  // Resposta inclui: dados dos devices + total + slots disponíveis.
-  // --------------------------------------------------------------------------
   fastify.get("/devices", { preHandler: guards }, listDevices);
 
   // --------------------------------------------------------------------------
   // GET /tv/devices/:id
-  // --------------------------------------------------------------------------
-  // Retorna detalhes de um único dispositivo, incluindo o current_content
-  // (última URL enviada para a tela — útil para polling de apps na TV).
   // --------------------------------------------------------------------------
   fastify.get("/devices/:id", { preHandler: guards }, getDevice);
 
   // --------------------------------------------------------------------------
   // POST /tv/devices
   // --------------------------------------------------------------------------
-  // Registra uma nova TV. Verifica limite de 5 TVs por tenant.
-  // Body: { name, ip_address, mac_address? }
-  // --------------------------------------------------------------------------
   fastify.post("/devices", { preHandler: guards }, registerDevice);
 
   // --------------------------------------------------------------------------
   // PATCH /tv/devices/:id
-  // --------------------------------------------------------------------------
-  // Atualiza campos de uma TV (name, ip_address, mac_address).
-  // Todos os campos são opcionais (semântica PATCH).
   // --------------------------------------------------------------------------
   fastify.patch("/devices/:id", { preHandler: guards }, updateDevice);
 
   // --------------------------------------------------------------------------
   // DELETE /tv/devices/:id
   // --------------------------------------------------------------------------
-  // Remove uma TV permanentemente, liberando um slot no limite de 5.
-  // --------------------------------------------------------------------------
   fastify.delete("/devices/:id", { preHandler: guards }, removeDevice);
 
   // --------------------------------------------------------------------------
-  // POST /tv/control
-  // --------------------------------------------------------------------------
-  // Envia conteúdo (URL) para uma TV via UPnP ou DIAL.
-  // Body: { deviceId, contentUrl, contentType, upnpPort?, dialPort? }
-  //
-  // contentType:
-  //   'video' | 'image' → UPnP AVTransport (SetAVTransportURI + Play)
-  //   'web'             → DIAL (POST /apps/Browser com url=...)
+  // POST /tv/control — legado (UPnP/DIAL direto)
   // --------------------------------------------------------------------------
   fastify.post("/control", { preHandler: guards }, controlTv);
 
   // --------------------------------------------------------------------------
-  // GET /tv/discover
-  // --------------------------------------------------------------------------
-  // Varre a rede local com SSDP para encontrar Smart TVs e dispositivos UPnP.
-  // Query params: ?timeout=5 (segundos, máximo 30)
-  //
-  // NOTA: Esta rota faz varredura UDP na rede — pode ser lenta dependendo
-  // do ambiente. Em produção, considere limitar a frequência de chamadas.
+  // GET /tv/discover — varredura SSDP na rede local
   // --------------------------------------------------------------------------
   fastify.get("/discover", { preHandler: guards }, discoverDevices);
 
   // --------------------------------------------------------------------------
-  // POST /tv/devices/:id/wol
-  // --------------------------------------------------------------------------
-  // Envia Magic Packet UDP para ligar uma TV via Wake-on-LAN.
-  // Requer MAC address cadastrado no dispositivo.
+  // POST /tv/devices/:id/wol — Wake-on-LAN
   // --------------------------------------------------------------------------
   fastify.post("/devices/:id/wol", { preHandler: guards }, wakeDevice);
 
   // --------------------------------------------------------------------------
-  // GET /tv/devices/:id/historico
-  // --------------------------------------------------------------------------
-  // Retorna o histórico de comandos enviados para uma TV específica.
-  // Query param: ?limit=50 (padrão 50, máximo 100)
+  // GET /tv/devices/:id/historico — histórico de comandos
   // --------------------------------------------------------------------------
   fastify.get(
     "/devices/:id/historico",
@@ -129,35 +115,72 @@ export async function tvRoutes(fastify: FastifyInstance) {
   );
 
   // --------------------------------------------------------------------------
-  // POST /tv/cast
+  // POST /tv/cast — waterfall multi-protocolo
   // --------------------------------------------------------------------------
-  // Envia conteúdo para uma TV via waterfall multi-protocolo:
-  //   WebSocket (socket.io) → Chromecast → UPnP/DLNA → DIAL
-  //
-  // Suporta: timer, video, image, web, clear
-  // Body: { deviceId, tipo, url?, duracao?, label? }
-  //
-  // Diferença vs POST /tv/control:
-  //   /control → UPnP/DIAL direto (legado, sem WebSocket)
-  //   /cast    → Waterfall inteligente, prioriza WebSocket (<100ms)
+  // Suporta: timer, video, image, web, clear, screen-share
   // --------------------------------------------------------------------------
   fastify.post("/cast", { preHandler: guards }, castToTv);
 
   // --------------------------------------------------------------------------
-  // POST /tv/devices/:id/pair
-  // --------------------------------------------------------------------------
-  // Gera um novo socket_token para o dispositivo.
-  // Retorna a URL do receiver.html com o token embutido na query string.
-  // A TV deve abrir essa URL no browser para parear com o WebSocket.
-  // ATENÇÃO: rotaciona o token — desconecta sessão anterior do receiver.
+  // POST /tv/devices/:id/pair — gera token + URL receiver.html
   // --------------------------------------------------------------------------
   fastify.post("/devices/:id/pair", { preHandler: guards }, pairDevice);
 
   // --------------------------------------------------------------------------
-  // GET /tv/devices/:id/token
-  // --------------------------------------------------------------------------
-  // Retorna o socket_token ATUAL (sem rotacionar) e a receiverUrl.
-  // Útil para exibir QR code de releitura sem desconectar a TV.
+  // GET /tv/devices/:id/token — ver token atual sem rotacionar
   // --------------------------------------------------------------------------
   fastify.get("/devices/:id/token", { preHandler: guards }, getDeviceToken);
+
+  // ==========================================================================
+  // ROTAS DE MÍDIA — Upload, Listagem e Remoção de Arquivos
+  // ==========================================================================
+
+  // --------------------------------------------------------------------------
+  // GET /tv/media
+  // --------------------------------------------------------------------------
+  // Lista todos os arquivos de mídia (vídeos e imagens) do tenant.
+  // Retorna: id, url, original_name, mime_type, size_bytes, created_at
+  // --------------------------------------------------------------------------
+  fastify.get("/media", { preHandler: guards }, listMedia);
+
+  // --------------------------------------------------------------------------
+  // GET /tv/media/:mediaId
+  // --------------------------------------------------------------------------
+  // Retorna metadados de um arquivo específico.
+  // Útil para preview antes de enviar para a TV.
+  // --------------------------------------------------------------------------
+  fastify.get("/media/:mediaId", { preHandler: guards }, getMedia);
+
+  // --------------------------------------------------------------------------
+  // POST /tv/media/upload
+  // --------------------------------------------------------------------------
+  // Recebe multipart/form-data com campo 'file'.
+  // Valida mime type, salva no disco e registra no banco do tenant.
+  // Limite: 100MB por arquivo. Formatos: mp4, webm, jpg, png, gif, webp.
+  //
+  // NOTA: Esta rota usa o @fastify/multipart que deve estar registrado
+  // globalmente no server.ts (como addContentTypeParser).
+  // --------------------------------------------------------------------------
+  fastify.post("/media/upload", { preHandler: guards }, uploadMedia);
+
+  // --------------------------------------------------------------------------
+  // DELETE /tv/media/:mediaId
+  // --------------------------------------------------------------------------
+  // Remove o arquivo do disco e o registro do banco simultaneamente.
+  // Retorna 404 se o arquivo não pertencer ao tenant.
+  // --------------------------------------------------------------------------
+  fastify.delete("/media/:mediaId", { preHandler: guards }, removeMedia);
+
+  // ==========================================================================
+  // ROTAS DE APPS — Catálogo de Aplicativos de Digital Signage
+  // ==========================================================================
+
+  // --------------------------------------------------------------------------
+  // GET /tv/apps
+  // --------------------------------------------------------------------------
+  // Retorna o catálogo de apps disponíveis para envio às TVs.
+  // Cada app tem: id, name, description, icon, url, category.
+  // O operador pode escolher um app e enviar via POST /tv/cast com tipo 'web'.
+  // --------------------------------------------------------------------------
+  fastify.get("/apps", { preHandler: guards }, listApps);
 }

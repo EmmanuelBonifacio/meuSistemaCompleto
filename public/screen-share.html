@@ -1,0 +1,486 @@
+<!doctype html>
+<!--
+  public/screen-share.html
+  Página de Compartilhamento de Tela (Emissor WebRTC) para Digital Signage.
+
+  O QUE ESTA PÁGINA FAZ:
+    Captura a tela do computador/celular do operador via getDisplayMedia()
+    e envia o stream de vídeo P2P diretamente para a TV através de WebRTC.
+    O backend é usado APENAS para troca de sinalização (SDP/ICE) — não
+    processa nenhum byte de vídeo.
+
+  COMO USAR:
+    Acesse via /static/screen-share.html?tenantId=UUID&deviceId=UUID
+    Ou via botão "Espelhar Tela" no painel de controle (que preenche os params).
+
+  FLUXO:
+    1. Página carrega → operador clica "Iniciar Compartilhamento"
+    2. Browser pede permissão para capturar a tela
+    3. Conecta ao /webrtc/:tenantId via Socket.IO
+    4. Emite webrtc:join { deviceId, role:'sender' }
+    5. Backend notifica receivers via webrtc:peer-joined
+    6. Para cada receiver que entrar, cria RTCPeerConnection + envia offer
+    7. Receiver responde com answer → ICE negociado → stream flui P2P
+    8. Operador clica "Parar" → emite webrtc:stop → todos os receivers encerram
+
+  POR QUE HTML PURO (SEM REACT)?
+    Precisa ser servido como estático pelo Fastify sem processo de build.
+    Compatibilidade com todos os browsers modernos sem transpilação.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Espelhar Tela · SistemaTV</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        min-height: 100vh;
+        background: #0f172a;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      .card {
+        background: #1e293b;
+        border-radius: 1.5rem;
+        padding: 3rem 2.5rem;
+        max-width: 500px;
+        width: 100%;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+      }
+      .icon {
+        font-size: 4rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #f1f5f9;
+        text-align: center;
+      }
+      p {
+        font-size: 0.95rem;
+        color: #94a3b8;
+        text-align: center;
+        line-height: 1.6;
+      }
+      #info-box {
+        background: #0f172a;
+        border-radius: 0.75rem;
+        padding: 1rem 1.5rem;
+        width: 100%;
+        font-size: 0.85rem;
+        color: #64748b;
+      }
+      #info-box span {
+        color: #94a3b8;
+      }
+      button {
+        width: 100%;
+        padding: 1rem;
+        border: none;
+        border-radius: 0.75rem;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          transform 0.1s,
+          opacity 0.2s;
+        letter-spacing: 0.03em;
+      }
+      button:active {
+        transform: scale(0.97);
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+      }
+      #btn-start {
+        background: #3b82f6;
+        color: #fff;
+      }
+      #btn-start:hover:not(:disabled) {
+        background: #2563eb;
+      }
+      #btn-stop {
+        background: #ef4444;
+        color: #fff;
+        display: none;
+      }
+      #btn-stop:hover:not(:disabled) {
+        background: #dc2626;
+      }
+
+      #status {
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: #f59e0b;
+        animation: blink 1.2s infinite;
+      }
+      .dot.ok {
+        background: #22c55e;
+        animation: none;
+      }
+      .dot.err {
+        background: #ef4444;
+        animation: none;
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      #preview {
+        width: 100%;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        background: #000;
+        display: none;
+        aspect-ratio: 16/9;
+      }
+      #preview video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      #receivers {
+        width: 100%;
+        font-size: 0.85rem;
+        color: #64748b;
+        text-align: center;
+      }
+      #receivers span {
+        color: #22c55e;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">&#x1F5A5;&#xFE0F;</div>
+      <h1>Espelhar Tela na TV</h1>
+      <p>
+        Compartilhe sua tela diretamente para os dispositivos selecionados via
+        conexão P2P criptografada.
+      </p>
+
+      <div id="info-box">
+        Tenant: <span id="info-tenant">—</span><br />
+        Dispositivo: <span id="info-device">—</span>
+      </div>
+
+      <div id="preview">
+        <video id="local-video" autoplay muted playsinline></video>
+      </div>
+
+      <div id="status">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">Aguardando início...</span>
+      </div>
+
+      <div id="receivers">
+        TVs conectadas: <span id="receiver-count">0</span>
+      </div>
+
+      <button id="btn-start">&#x1F4F6; Iniciar Compartilhamento</button>
+      <button id="btn-stop">&#x23F9;&#xFE0F; Parar Compartilhamento</button>
+    </div>
+
+    <script src="https://unpkg.com/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+    <script>
+      // Lê parâmetros da URL inseridos pelo painel de controle
+      var params = new URLSearchParams(window.location.search);
+      var TENANT_ID = params.get("tenantId") || "";
+      var DEVICE_ID = params.get("deviceId") || "";
+      var BACKEND_URL = window.location.origin;
+
+      // Exibe informações na tela
+      document.getElementById("info-tenant").textContent =
+        TENANT_ID || "(não informado)";
+      document.getElementById("info-device").textContent =
+        DEVICE_ID || "(não informado)";
+
+      // Elementos do DOM
+      var btnStart = document.getElementById("btn-start");
+      var btnStop = document.getElementById("btn-stop");
+      var statusDot = document.getElementById("status-dot");
+      var statusText = document.getElementById("status-text");
+      var preview = document.getElementById("preview");
+      var localVideo = document.getElementById("local-video");
+      var receiverCount = document.getElementById("receiver-count");
+
+      // Estado da sessão
+      var localStream = null; // MediaStream capturado pelo getDisplayMedia
+      var sigSocket = null; // Socket.IO para sinalização no namespace /webrtc
+      var peers = {}; // Map<socketId, RTCPeerConnection> — um por receiver
+      var activeReceivers = 0;
+
+      // Configuração STUN pública — permite atravessar NAT básico
+      var ICE_SERVERS = {
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      };
+
+      // ==========================================================================
+      // BOTÃO INICIAR
+      // ==========================================================================
+      btnStart.addEventListener("click", async function () {
+        if (!TENANT_ID || !DEVICE_ID) {
+          setStatus("err", "tenantId e deviceId são obrigatórios na URL.");
+          return;
+        }
+
+        btnStart.disabled = true;
+        setStatus("connecting", "Solicitando acesso à tela...");
+
+        try {
+          // Captura a tela — o browser exibirá o seletor nativo de janelas/telas
+          localStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: "always" },
+            audio: false,
+          });
+        } catch (e) {
+          setStatus("err", "Permissão negada ou captura cancelada.");
+          btnStart.disabled = false;
+          return;
+        }
+
+        // Mostra preview local (sem áudio — já está muted no elemento)
+        localVideo.srcObject = localStream;
+        preview.style.display = "block";
+
+        // Usuário pode fechar pelo seletor nativo do browser
+        localStream.getVideoTracks()[0].addEventListener("ended", function () {
+          stopSharing();
+        });
+
+        // Conecta ao namespace de sinalização WebRTC
+        connectSignaling();
+
+        btnStart.style.display = "none";
+        btnStop.style.display = "block";
+      });
+
+      // ==========================================================================
+      // BOTÃO PARAR
+      // ==========================================================================
+      btnStop.addEventListener("click", function () {
+        stopSharing();
+      });
+
+      // ==========================================================================
+      // SINALIZAÇÃO VIA SOCKET.IO
+      // ==========================================================================
+      function connectSignaling() {
+        sigSocket = io(BACKEND_URL + "/webrtc/" + TENANT_ID, {
+          transports: ["websocket"],
+        });
+
+        sigSocket.on("connect", function () {
+          setStatus("ok", "Conectado — aguardando TVs...");
+          // Anuncia que este emissor está na sala
+          sigSocket.emit("webrtc:join", {
+            deviceId: DEVICE_ID,
+            role: "sender",
+          });
+        });
+
+        // Uma TV entrou na sala — inicia oferta WebRTC para ela
+        sigSocket.on("webrtc:peer-joined", function (data) {
+          createOffer(data.socketId);
+        });
+
+        // Recebe resposta SDP de uma TV
+        sigSocket.on("webrtc:answer", function (data) {
+          var pc = peers[data.from];
+          if (pc) {
+            pc.setRemoteDescription(
+              new RTCSessionDescription(data.answer),
+            ).catch(function (e) {
+              console.error("[webrtc] setRemoteDescription:", e);
+            });
+          }
+        });
+
+        // Recebe candidatos ICE de uma TV
+        sigSocket.on("webrtc:ice-candidate", function (data) {
+          var pc = peers[data.from];
+          if (pc && data.candidate) {
+            pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(
+              function (e) {
+                console.warn("[webrtc] addIceCandidate:", e);
+              },
+            );
+          }
+        });
+
+        // Uma TV saiu da sala
+        sigSocket.on("webrtc:peer-left", function (data) {
+          closePeer(data.socketId);
+          updateReceiverCount(-1);
+        });
+
+        sigSocket.on("disconnect", function () {
+          setStatus("err", "Conexão de sinalização perdida.");
+        });
+
+        sigSocket.on("connect_error", function (e) {
+          setStatus("err", "Erro de conexão: " + e.message);
+        });
+      }
+
+      // ==========================================================================
+      // WEBRTC — CRIAÇÃO DE OFERTA
+      // ==========================================================================
+      function createOffer(receiverSocketId) {
+        var pc = new RTCPeerConnection(ICE_SERVERS);
+        peers[receiverSocketId] = pc;
+
+        // Adiciona as faixas de vídeo ao peer connection
+        localStream.getTracks().forEach(function (track) {
+          pc.addTrack(track, localStream);
+        });
+
+        // Envia candidatos ICE ao receiver via relay do backend
+        pc.onicecandidate = function (event) {
+          if (event.candidate && sigSocket) {
+            sigSocket.emit("webrtc:ice-candidate", {
+              to: receiverSocketId,
+              candidate: event.candidate,
+            });
+          }
+        };
+
+        pc.onconnectionstatechange = function () {
+          if (pc.connectionState === "connected") {
+            updateReceiverCount(1);
+            setStatus("ok", "Transmitindo para " + activeReceivers + " TV(s)");
+          }
+          if (
+            pc.connectionState === "disconnected" ||
+            pc.connectionState === "failed"
+          ) {
+            closePeer(receiverSocketId);
+            updateReceiverCount(-1);
+          }
+        };
+
+        // Cria oferta SDP e envia ao receiver
+        pc.createOffer()
+          .then(function (offer) {
+            return pc.setLocalDescription(offer).then(function () {
+              return offer;
+            });
+          })
+          .then(function (offer) {
+            if (sigSocket) {
+              sigSocket.emit("webrtc:offer", {
+                to: receiverSocketId,
+                offer: offer,
+              });
+            }
+          })
+          .catch(function (e) {
+            console.error("[webrtc] createOffer:", e);
+          });
+      }
+
+      // ==========================================================================
+      // HELPERS
+      // ==========================================================================
+      function closePeer(id) {
+        if (peers[id]) {
+          peers[id].close();
+          delete peers[id];
+        }
+      }
+
+      function updateReceiverCount(delta) {
+        activeReceivers = Math.max(0, activeReceivers + delta);
+        receiverCount.textContent = String(activeReceivers);
+      }
+
+      function stopSharing() {
+        // Para todas as tracks capturadas
+        if (localStream) {
+          localStream.getTracks().forEach(function (t) {
+            t.stop();
+          });
+          localStream = null;
+        }
+
+        // Fecha todos os peers
+        Object.keys(peers).forEach(function (id) {
+          closePeer(id);
+        });
+        peers = {};
+
+        // Notifica receivers que o compartilhamento encerrou
+        if (sigSocket) {
+          sigSocket.emit("webrtc:stop", { deviceId: DEVICE_ID });
+          sigSocket.disconnect();
+          sigSocket = null;
+        }
+
+        // Reseta UI
+        localVideo.srcObject = null;
+        preview.style.display = "none";
+        activeReceivers = 0;
+        receiverCount.textContent = "0";
+        setStatus("idle", "Compartilhamento encerrado.");
+        btnStop.style.display = "none";
+        btnStart.style.display = "block";
+        btnStart.disabled = false;
+      }
+
+      function setStatus(state, text) {
+        statusDot.className = "dot";
+        if (state === "ok") statusDot.classList.add("ok");
+        if (state === "err") statusDot.classList.add("err");
+        statusText.textContent = text;
+      }
+
+      // Valida suporte do browser
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        setStatus("err", "Seu browser não suporta compartilhamento de tela.");
+        btnStart.disabled = true;
+      }
+      if (!window.RTCPeerConnection) {
+        setStatus("err", "Seu browser não suporta WebRTC.");
+        btnStart.disabled = true;
+      }
+    </script>
+  </body>
+</html>

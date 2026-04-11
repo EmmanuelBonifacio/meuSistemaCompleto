@@ -34,6 +34,7 @@
 //   Timer/Cronômetro → WebSocket (cast:timer) → receiver.html desenha o timer
 //   Imagens          → WebSocket OU DLNA (serve via @fastify/static)
 //   Vídeos           → WebSocket (<video>) OU DLNA (AVTransport)
+//   screen-share     → WebSocket (cast:screen-share) → receiver.html aguarda WebRTC
 //   Multi-conexão    → Waterfall: WebSocket → Chromecast → DIAL → DLNA
 // =============================================================================
 
@@ -165,7 +166,13 @@ export async function castToDevice(input: CastInput): Promise<CastResult> {
   //   O timer é uma feature exclusiva do receiver.html (HTML+JS).
   //   Se WebSocket falhou e o conteúdo é 'timer', não há fallback.
   // ===========================================================================
-  if (contentType === "timer" || contentType === "clear") {
+  // screen-share, timer e clear são exclusivos do WebSocket.
+  // Sem fallback possível via UPnP/DIAL para esses tipos.
+  if (
+    contentType === "timer" ||
+    contentType === "clear" ||
+    contentType === "screen-share"
+  ) {
     return {
       success: false,
       protocol: "none",

@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  public/apps/slides.html
+  App de Apresentação de Slides para Digital Signage.
+  Parâmetros URL: ?imagens=url1,url2,url3&intervalo=5&titulo=Meu+Evento
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slides</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      #stage {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+      }
+      .slide {
+        position: absolute;
+        inset: 0;
+        background-size: cover;
+        background-position: center;
+        opacity: 0;
+        transition: opacity 1s ease-in-out;
+      }
+      .slide.active {
+        opacity: 1;
+      }
+      #titulo {
+        position: absolute;
+        bottom: 3%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: clamp(1.5rem, 3vw, 3rem);
+        color: #fff;
+        font-weight: 700;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+        z-index: 10;
+      }
+      #indicadores {
+        position: absolute;
+        bottom: 1.5%;
+        left: 0;
+        right: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        z-index: 10;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.4);
+        transition:
+          background 0.3s,
+          transform 0.3s;
+      }
+      .dot.active {
+        background: #fff;
+        transform: scale(1.3);
+      }
+      #empty {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 1.5rem;
+        background: #1e293b;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="indicadores"></div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const imagensParam = params.get("imagens") || "";
+      const intervalo =
+        Math.max(2, parseInt(params.get("intervalo") || "5", 10)) * 1000;
+      const titulo = params.get("titulo") || "";
+      const stage = document.getElementById("stage");
+      const indicadores = document.getElementById("indicadores");
+
+      const urls = imagensParam
+        ? imagensParam
+            .split(",")
+            .map((u) => u.trim())
+            .filter(Boolean)
+        : [];
+
+      if (urls.length === 0) {
+        // Sem imagens: mostra mensagem de espera
+        const empty = document.createElement("div");
+        empty.id = "empty";
+        empty.textContent =
+          "Nenhuma imagem configurada. Passe ?imagens=url1,url2 na URL.";
+        stage.appendChild(empty);
+      } else {
+        // Injeta slides e indicadores
+        urls.forEach((url, i) => {
+          const slide = document.createElement("div");
+          slide.className = "slide" + (i === 0 ? " active" : "");
+          slide.style.backgroundImage = `url('${encodeURI(url)}')`;
+          stage.appendChild(slide);
+
+          const dot = document.createElement("span");
+          dot.className = "dot" + (i === 0 ? " active" : "");
+          indicadores.appendChild(dot);
+        });
+
+        if (titulo) {
+          const t = document.createElement("div");
+          t.id = "titulo";
+          t.textContent = titulo;
+          stage.appendChild(t);
+        }
+
+        const slides = Array.from(document.querySelectorAll(".slide"));
+        const dots = Array.from(document.querySelectorAll(".dot"));
+        let current = 0;
+
+        setInterval(() => {
+          slides[current].classList.remove("active");
+          dots[current].classList.remove("active");
+          current = (current + 1) % slides.length;
+          slides[current].classList.add("active");
+          dots[current].classList.add("active");
+        }, intervalo);
+      }
+    </script>
+  </body>
+</html>

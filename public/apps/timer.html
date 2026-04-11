@@ -1,0 +1,116 @@
+<!doctype html>
+<!--
+  public/apps/timer.html
+  App de Cronômetro Regressivo para Digital Signage.
+  Parâmetros URL: ?duracao=300&label=Fila+de+Atendimento&tenantId=...&token=...
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cronômetro</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+        font-family: "Segoe UI", Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #label {
+        font-size: clamp(1.5rem, 4vw, 3rem);
+        color: #94a3b8;
+        font-weight: 600;
+        margin-bottom: 2rem;
+        text-align: center;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      #timer {
+        font-size: clamp(8rem, 25vw, 20rem);
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: -0.05em;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 60px rgba(96, 165, 250, 0.5);
+        transition: color 0.3s;
+      }
+      #timer.danger {
+        color: #f87171;
+        text-shadow: 0 0 60px rgba(248, 113, 113, 0.6);
+      }
+      #timer.warning {
+        color: #fbbf24;
+        text-shadow: 0 0 60px rgba(251, 191, 36, 0.4);
+      }
+      #status {
+        margin-top: 2rem;
+        font-size: clamp(1rem, 2vw, 1.5rem);
+        color: #64748b;
+        font-weight: 400;
+      }
+      #status.ended {
+        color: #ef4444;
+        font-size: clamp(2rem, 5vw, 4rem);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="label">Apresentação</div>
+    <div id="timer">00:00</div>
+    <div id="status">em andamento</div>
+
+    <script>
+      // Lê parâmetros da URL
+      const params = new URLSearchParams(window.location.search);
+      let duracao = parseInt(params.get("duracao") || "300", 10);
+      const label = params.get("label") || "Cronômetro";
+
+      document.getElementById("label").textContent = label;
+
+      function format(s) {
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (h > 0)
+          return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+        return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+      }
+
+      const el = document.getElementById("timer");
+      const status = document.getElementById("status");
+      let remaining = duracao;
+      el.textContent = format(remaining);
+
+      const interval = setInterval(() => {
+        remaining--;
+        el.textContent = format(remaining);
+
+        // Muda cor conforme urgência
+        el.className =
+          remaining <= 30 ? "danger" : remaining <= 60 ? "warning" : "";
+
+        if (remaining <= 0) {
+          clearInterval(interval);
+          el.textContent = "00:00";
+          el.className = "danger";
+          status.textContent = "TEMPO ESGOTADO";
+          status.className = "ended";
+        }
+      }, 1000);
+    </script>
+  </body>
+</html>

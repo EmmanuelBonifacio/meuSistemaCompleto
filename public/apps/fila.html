@@ -1,0 +1,226 @@
+<!doctype html>
+<!--
+  public/apps/fila.html
+  Painel de Fila de Atendimento para Digital Signage.
+  Parâmetros URL: ?tenantId=abc&titulo=Atendimento&cor=#3b82f6
+  Recebe atualizações via Socket.IO namespace /cast/:tenantId
+  Evento: fila:update com payload { chamada: string, fila: string[] }
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Painel de Fila</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0f172a;
+        font-family: "Segoe UI", Arial, sans-serif;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+      header {
+        background: var(--cor, #3b82f6);
+        padding: 1.5rem 3rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      header h1 {
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        color: #fff;
+        font-weight: 800;
+      }
+      header #clock {
+        font-size: clamp(1.5rem, 3vw, 2.5rem);
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 600;
+      }
+
+      #main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        padding: 3rem;
+      }
+
+      #chamada-box {
+        background: linear-gradient(
+          135deg,
+          var(--cor, #3b82f6) 0%,
+          #1d4ed8 100%
+        );
+        border-radius: 1.5rem;
+        padding: 3rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #chamada-label {
+        font-size: clamp(1rem, 2vw, 1.5rem);
+        color: rgba(255, 255, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+      #chamada-numero {
+        font-size: clamp(8rem, 15vw, 12rem);
+        font-weight: 900;
+        color: #fff;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      #chamada-box.animate #chamada-numero {
+        animation: pulse 0.6s ease;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.08);
+        }
+      }
+
+      #fila-box {
+        background: #1e293b;
+        border-radius: 1.5rem;
+        padding: 2rem;
+        overflow: hidden;
+      }
+      #fila-titulo {
+        font-size: 1.2rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 1rem;
+      }
+      #fila-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      #fila-list li {
+        background: #334155;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1.25rem;
+        font-size: clamp(1.5rem, 3vw, 2.5rem);
+        color: #fff;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      #fila-list li .pos {
+        font-size: 0.85em;
+        color: #64748b;
+        font-weight: 400;
+        min-width: 2ch;
+      }
+
+      footer {
+        padding: 0.75rem 3rem;
+        background: #0f172a;
+        font-size: 0.875rem;
+        color: #475569;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="titulo">Atendimento</h1>
+      <span id="clock"></span>
+    </header>
+    <div id="main">
+      <div id="chamada-box">
+        <div class="chamada-label">Chamando</div>
+        <div id="chamada-numero">--</div>
+      </div>
+      <div id="fila-box">
+        <div id="fila-titulo">Próximos na fila</div>
+        <ul id="fila-list"></ul>
+      </div>
+    </div>
+    <footer>Aguarde ser chamado · Atendimento automático</footer>
+
+    <script
+      src="https://cdn.socket.io/4.7.5/socket.io.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const tenantId = params.get("tenantId") || "";
+      const titulo = params.get("titulo") || "Atendimento";
+      const cor = params.get("cor") || "#3b82f6";
+
+      document.documentElement.style.setProperty("--cor", cor);
+      document.getElementById("titulo").textContent = titulo;
+
+      // Relógio ao vivo
+      function updateClock() {
+        document.getElementById("clock").textContent =
+          new Date().toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+      }
+      updateClock();
+      setInterval(updateClock, 10000);
+
+      const chamadaEl = document.getElementById("chamada-numero");
+      const filaEl = document.getElementById("fila-list");
+      const chamadaBox = document.getElementById("chamada-box");
+
+      function animarChamada() {
+        chamadaBox.classList.remove("animate");
+        void chamadaBox.offsetWidth; // reflow para reiniciar animação
+        chamadaBox.classList.add("animate");
+      }
+
+      function renderFila(fila) {
+        filaEl.innerHTML = fila
+          .slice(0, 8)
+          .map(
+            (item, i) => `<li><span class="pos">${i + 1}º</span>${item}</li>`,
+          )
+          .join("");
+      }
+
+      if (tenantId) {
+        const socket = io(`/cast/${tenantId}`, { transports: ["websocket"] });
+
+        // Recebe evento de atualização de fila
+        socket.on("fila:update", ({ chamada, fila }) => {
+          if (chamada !== chamadaEl.textContent) {
+            chamadaEl.textContent = chamada || "--";
+            animarChamada();
+          }
+          renderFila(fila || []);
+        });
+
+        // Também reage a cast genérico para compatibilidade
+        socket.on("cast", (payload) => {
+          if (payload.tipo === "fila" && payload.dados) {
+            const { chamada, fila } = payload.dados;
+            chamadaEl.textContent = chamada || "--";
+            animarChamada();
+            renderFila(fila || []);
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

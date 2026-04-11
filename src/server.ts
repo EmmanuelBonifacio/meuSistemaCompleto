@@ -18,6 +18,7 @@ import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
+import fastifyMultipart from "@fastify/multipart";
 import path from "path";
 import { disconnectPrisma } from "./core/database/prisma";
 import { initSocketServer } from "./modules/tv/tv.socket";
@@ -278,6 +279,56 @@ async function buildServer() {
     // receiver.html muda raramente — cache melhora a performance na TV.
     cacheControl: true,
     maxAge: "1h",
+  });
+
+  // ---------------------------------------------------------------------------
+  // PLUGIN: @fastify/static (segunda instância) — serve arquivos de uploads
+  // ---------------------------------------------------------------------------
+  // O QUE FAZ:
+  //   Serve a pasta /uploads/ como arquivos estáticos acessíveis via /uploads/*
+  //   Isso permite que vídeos e imagens enviados via POST /tv/media/upload
+  //   sejam acessados pela TV via URL: /uploads/{tenantSlug}/{filename}
+  //
+  // POR QUE `decorateReply: false`?
+  //   O @fastify/static só pode ser registrado UMA VEZ com decorateReply=true.
+  //   A segunda instância deve ter decorateReply=false para evitar conflito.
+  //   O Fastify lança erro se dois plugins tentam decorar o mesmo nome.
+  //
+  // SEGURANÇA: A pasta uploads/ fica fora de /src e /public — não é
+  //   acessível via /static/, apenas via /uploads/. Arquivos de código
+  //   fonte nunca ficam na mesma pasta que uploads de usuários.
+  // ---------------------------------------------------------------------------
+  await app.register(fastifyStatic, {
+    root: path.join(process.cwd(), "uploads"),
+    prefix: "/uploads/",
+    cacheControl: true,
+    maxAge: "10m",
+    decorateReply: false, // Segunda instância: sem redeclaração dos helpers
+  });
+
+  // ---------------------------------------------------------------------------
+  // PLUGIN: @fastify/multipart — suporte a upload de arquivos
+  // ---------------------------------------------------------------------------
+  // O QUE FAZ:
+  //   Registra o parser de multipart/form-data globalmente.
+  //   Sem este plugin, as rotas de upload (POST /tv/media/upload) não
+  //   conseguem ler o conteúdo dos arquivos enviados pelo browser.
+  //
+  // POR QUE REGISTRAR GLOBALMENTE (aqui) E NÃO POR ROTA?
+  //   O @fastify/multipart funciona como um plugin Fastify — precisa ser
+  //   registrado no escopo raiz para estar disponível em todos os plugins filhos.
+  //   Se registrado dentro do tvRoutes (escopo filho), não estaria disponível
+  //   para outras rotas futuras de upload.
+  //
+  // LIMITES GLOBAIS (ajustáveis por rota via options no request.file()):
+  //   fileSize: 100MB — limite máximo global (pode ser reduzido por rota)
+  //   files: 1 — aceita apenas 1 arquivo por request (segurança)
+  // ---------------------------------------------------------------------------
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: 100 * 1024 * 1024, // 100MB global — enforçado também no controller
+      files: 1, // Apenas 1 arquivo por request
+    },
   });
 
   // Módulo de Autenticação (rotas públicas — sem tenantMiddleware)

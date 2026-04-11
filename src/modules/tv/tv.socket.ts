@@ -5,8 +5,13 @@
 //   Servidor WebSocket do módulo TV usando Socket.IO.
 //   Permite comunicação bidirecional em tempo real entre o backend e os
 //   apps receptores (receiver.html) que rodam dentro dos browsers das TVs.
+//   Também gerencia a sinalização WebRTC para espelhamento de tela.
 //
-// ARQUITETURA DO FLUXO WEBSOCKET:
+// DOIS NAMESPACES:
+//   /cast/:tenantId   → comandos de conteúdo para TVs (já existia)
+//   /webrtc/:tenantId → sinalização WebRTC para espelhamento de tela (novo)
+//
+// ARQUITETURA DO FLUXO WEBSOCKET (cast):
 //
 //   Operador (painel) → POST /tv/cast
 //         ↓
@@ -15,6 +20,16 @@
 //   tv.socket.ts → Socket.IO → receiver.html (browser da TV)
 //         ↓
 //   TV exibe: timer, vídeo, imagem ou página web
+//
+// ARQUITETURA DO FLUXO WEBRTC (espelhamento):
+//
+//   Celular/PC do usuário (screen-share.html)
+//         ↓ webrtc:offer
+//   tv.socket.ts (sinalização — NÃO carrega vídeo)
+//         ↓ webrtc:offer repassado
+//   receiver.html na TV
+//         ↓ webrtc:answer + ICE candidates (ambos lados)
+//   Conexão P2P direta: vídeo flui SEM passar pelo servidor
 //
 // POR QUE SOCKET.IO E NÃO WS NATIVO?
 //   Socket.IO adiciona sobre o WebSocket padrão:
@@ -50,12 +65,15 @@ import { Server as HttpServer } from "http";
 // =============================================================================
 // Payload que o controller envia para tv.cast.ts e que chega na TV via socket.
 // 'timer' usa `duracao` (segundos). Os demais usam `url`.
+// 'screen-share' prepara a TV para receber stream WebRTC: exibe tela de espera.
 // =============================================================================
 export interface CastPayload {
-  tipo: "timer" | "video" | "image" | "web" | "clear";
+  tipo: "timer" | "video" | "image" | "web" | "clear" | "screen-share";
   url?: string; // Para 'video', 'image', 'web'
   duracao?: number; // Para 'timer' — em segundos. Ex: 300 = 5 minutos
   label?: string; // Texto opcional exibido abaixo do timer
+  deviceId?: string; // Para 'screen-share' — deviceId para montar a room WebRTC
+  tenantId?: string; // Para 'screen-share' — compõe o namespace /webrtc/{tenantId}
 }
 
 // =============================================================================
@@ -239,8 +257,11 @@ export function initSocketServer(
     });
   });
 
+  // Inicia o namespace WebRTC para sinalização de espelhamento de tela
+  initWebRtcNamespace(io);
+
   console.info(
-    "[TV Socket] ✅ Servidor Socket.IO inicializado. Namespaces: /cast/:tenantId",
+    "[TV Socket] ✅ Servidor Socket.IO inicializado. Namespaces: /cast/:tenantId | /webrtc/:tenantId",
   );
   return io;
 }
@@ -302,4 +323,151 @@ export function castToDeviceViaSocket(
 // =============================================================================
 export function getConnectedDevices(tenantId: string): string[] {
   return Array.from(activeConnections.get(tenantId)?.keys() ?? []);
+}
+
+// =============================================================================
+// NAMESPACE: /webrtc/:tenantId — Sinalização WebRTC para Espelhamento de Tela
+// =============================================================================
+// O QUE FAZ:
+//   Serve como "serviço de sinalização" WebRTC. O backend NÃO processa vídeo:
+//   ele apenas repassa as mensagens de negociação entre o emissor (celular/PC)
+//   e o receptor (receiver.html na TV).
+//
+// POR QUE O BACKEND É NECESSÁRIO SE WebRTC É P2P?
+//   WebRTC só cria a conexão P2P APÓS uma fase inicial de "sinalização":
+//   os dois lados precisam trocar SDP (Session Description Protocol) e
+//   ICE candidates para descobrir como se conectar diretamente.
+//   Essa troca precisa de um intermediário — este é o papel do backend aqui.
+//   Uma vez conectados P2P, o backend sai completamente do caminho.
+//
+// EVENTOS DE SINALIZAÇÃO (emissor → backend → receptor):
+//   webrtc:offer          → emissor inicia, backend repassa para a TV certa
+//   webrtc:answer         → TV responde, backend repassa para o emissor
+//   webrtc:ice-candidate  → candidatos de conexão (ambos lados)
+//   webrtc:stop           → emissor encerra o compartilhamento
+//
+// ISOLAMENTO MULTI-TENANT:
+//   Cada tenant tem seu próprio namespace /webrtc/{tenantId}.
+//   Um emissor de tenant A nunca pode atingir uma TV de tenant B.
+// =============================================================================
+function initWebRtcNamespace(socketServer: SocketIoServer): void {
+  const webrtcNamespace = socketServer.of(/^\/webrtc\/.+$/);
+
+  webrtcNamespace.on("connection", (socket: Socket) => {
+    // Extrai o tenantId do namespace: "/webrtc/tenant-xyz" → "tenant-xyz"
+    const tenantId = socket.nsp.name.replace("/webrtc/", "");
+
+    console.info(
+      `[WebRTC Socket] Nova conexão de sinalização no tenant ${tenantId}. Socket: ${socket.id}`,
+    );
+
+    // -------------------------------------------------------------------------
+    // EVENTO: webrtc:join
+    // -------------------------------------------------------------------------
+    // O QUE FAZ:
+    //   O emissor (screen-share.html) ou receptor (receiver.html) declara
+    //   para qual deviceId quer se comunicar.
+    //   Ambos entram na mesma "room" para troca direta de mensagens.
+    //
+    // FLUXO:
+    //   Emissor → webrtc:join { deviceId, role: 'sender' }
+    //   Receptor → webrtc:join { deviceId, role: 'receiver' }
+    //   Backend → ambos na room `webrtc:device:{deviceId}`
+    // -------------------------------------------------------------------------
+    socket.on(
+      "webrtc:join",
+      (data: { deviceId: string; role: "sender" | "receiver" }) => {
+        const { deviceId, role } = data;
+        const room = `webrtc:device:${deviceId}`;
+        socket.join(room);
+        socket.data.deviceId = deviceId;
+        socket.data.role = role;
+
+        // Avisa os outros membros da room que alguém entrou
+        socket
+          .to(room)
+          .emit("webrtc:peer-joined", { role, socketId: socket.id });
+
+        console.info(
+          `[WebRTC] ${role} entrou na room ${room} (tenant ${tenantId})`,
+        );
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // EVENTO: webrtc:offer
+    // -------------------------------------------------------------------------
+    // O QUE FAZ:
+    //   Emissor envia o SDP offer (descrição da sessão de vídeo) para a TV.
+    //   O backend repassa diretamente para o socket de destino (`to` = socketId).
+    //
+    // POR QUE RELAY POR SOCKET.ID E NÃO POR ROOM?
+    //   Na negociação WebRTC o emissor conhece o socketId do receptor
+    //   (recebido via webrtc:peer-joined). Relay direto é mais preciso:
+    //   evita entregar o offer para outros sockets na mesma room.
+    //
+    // TIPOS: `unknown` porque SDP é estrutura do browser — o backend
+    //   não precisa inspecionar, apenas repassar o objeto como recebeu.
+    // -------------------------------------------------------------------------
+    socket.on("webrtc:offer", (data: { to: string; offer: unknown }) => {
+      socket
+        .to(data.to)
+        .emit("webrtc:offer", { offer: data.offer, from: socket.id });
+    });
+
+    // -------------------------------------------------------------------------
+    // EVENTO: webrtc:answer
+    // -------------------------------------------------------------------------
+    // TV (receiver.html) responde ao offer com seu SDP answer.
+    // Backend repassa diretamente para o socketId do emissor (`to`).
+    // -------------------------------------------------------------------------
+    socket.on("webrtc:answer", (data: { to: string; answer: unknown }) => {
+      socket
+        .to(data.to)
+        .emit("webrtc:answer", { answer: data.answer, from: socket.id });
+    });
+
+    // -------------------------------------------------------------------------
+    // EVENTO: webrtc:ice-candidate
+    // -------------------------------------------------------------------------
+    // Repassa candidatos ICE entre as partes por socketId direto.
+    // ICE candidates descrevem rotas de rede para conexão P2P.
+    // -------------------------------------------------------------------------
+    socket.on(
+      "webrtc:ice-candidate",
+      (data: { to: string; candidate: unknown }) => {
+        socket.to(data.to).emit("webrtc:ice-candidate", {
+          candidate: data.candidate,
+          from: socket.id,
+        });
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // EVENTO: webrtc:stop
+    // -------------------------------------------------------------------------
+    // O QUE FAZ:
+    //   Emissor encerrou o compartilhamento de tela.
+    //   Backend avisa a TV para limpar o stream P2P e voltar ao estado de espera.
+    // -------------------------------------------------------------------------
+    socket.on("webrtc:stop", (data: { deviceId: string }) => {
+      const room = `webrtc:device:${data.deviceId}`;
+      socket.to(room).emit("webrtc:stop");
+      console.info(
+        `[WebRTC] Compartilhamento encerrado para device ${data.deviceId} (tenant ${tenantId})`,
+      );
+    });
+
+    socket.on("disconnect", () => {
+      const { deviceId, role } = socket.data;
+      if (deviceId) {
+        const room = `webrtc:device:${deviceId}`;
+        socket.to(room).emit("webrtc:peer-left", { role });
+      }
+    });
+  });
+
+  console.info(
+    "[TV Socket] ✅ Namespace WebRTC inicializado: /webrtc/:tenantId",
+  );
 }

@@ -199,7 +199,7 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
       content_url   TEXT         NOT NULL,
       content_type  VARCHAR(20)  NOT NULL
                     CONSTRAINT tv_command_logs_type_check
-                    CHECK (content_type IN ('video', 'image', 'web', 'timer')),
+                    CHECK (content_type IN ('video', 'image', 'web', 'timer', 'screen-share')),
       -- protocol_used expandido para cobrir todos os protocolos do waterfall:
       --   'websocket'   → enviado via Socket.IO ao receiver.html na TV
       --   'chromecast'  → enviado via Cast REST API
@@ -217,6 +217,40 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // Índice para buscar histórico de um device específico (ordenado do mais recente)
     `CREATE INDEX IF NOT EXISTS idx_tv_command_logs_device
       ON "${schemaName}".tv_command_logs (device_id, sent_at DESC)`,
+
+    // -----------------------------------------------------------------
+    // TABELA: media_files (Módulo de Mídia — Streaming & Digital Signage)
+    // -----------------------------------------------------------------
+    // Armazena os metadados de arquivos (vídeos e imagens) enviados via
+    // upload pelo tenant. O arquivo físico fica no disco em /uploads/{slug}/.
+    //
+    // POR QUE GUARDAR SÓ METADADOS E NÃO O ARQUIVO NO BANCO?
+    //   Armazenar BLOBs no banco infla seu tamanho, degrada performance de
+    //   backups e impede uso de CDN. O padrão da indústria é salvar o arquivo
+    //   em disco (ou S3/MinIO) e registrar apenas a URL no banco.
+    //
+    // CAMPOS:
+    //   filename      → nome único no disco (UUID + extensão) — evita colisões
+    //   original_name → nome original do arquivo (para exibição ao usuário)
+    //   url           → URL pública para acesso: /uploads/{tenantSlug}/{filename}
+    //   mime_type     → tipo MIME validado no upload (ex: video/mp4, image/jpeg)
+    //   size_bytes    → tamanho em bytes (para exibir ao usuário e limitar storage)
+    //   uploaded_by   → UUID do usuário que fez o upload (auditoria)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".media_files (
+      id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+      filename      VARCHAR(255) NOT NULL,
+      original_name VARCHAR(255) NOT NULL,
+      url           TEXT         NOT NULL,
+      mime_type     VARCHAR(100) NOT NULL,
+      size_bytes    BIGINT       NOT NULL DEFAULT 0,
+      uploaded_by   UUID,
+      created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    )`,
+
+    // Índice para listar mídias por data de upload (mais recentes primeiro)
+    `CREATE INDEX IF NOT EXISTS idx_media_files_created
+      ON "${schemaName}".media_files (created_at DESC)`,
 
     // -----------------------------------------------------------------
     // TABELA: users (Módulo de Autenticação)

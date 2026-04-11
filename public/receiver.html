@@ -226,6 +226,36 @@
       }
 
       /* =========================================================================
+       WEBRTC (espelhamento de tela via P2P)
+       Exibe o stream remoto recebido do emissor (PC/celular do operador).
+    ========================================================================= */
+      #webrtc-screen {
+        display: none;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        position: relative;
+      }
+      #webrtc-video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+      #webrtc-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: rgba(0, 0, 0, 0.6);
+        color: #22c55e;
+        font-size: 0.8rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        font-family: "Segoe UI", Arial, sans-serif;
+        letter-spacing: 0.05em;
+      }
+
+      /* =========================================================================
        ERRO (exibido quando perde conexão definitivamente)
     ========================================================================= */
       #error-overlay {
@@ -273,6 +303,12 @@
         id="web-iframe"
         sandbox="allow-scripts allow-same-origin allow-forms"
       ></iframe>
+    </div>
+
+    <!-- Tela de espelhamento de tela (WebRTC receptor) -->
+    <div id="webrtc-screen">
+      <video id="webrtc-video" autoplay playsinline></video>
+      <div id="webrtc-badge">&#x1F4F6; Espelhamento ao vivo</div>
     </div>
 
     <!-- Overlay de erro de rede -->
@@ -419,7 +455,17 @@
         // EVENTO: cast:clear — limpa tela e volta ao estado de espera
         // -----------------------------------------------------------------------
         socket.on("cast:clear", function () {
+          stopWebRtc();
           clearDisplay();
+        });
+
+        // -----------------------------------------------------------------------
+        // EVENTO: cast:screen-share — operador iniciou espelhamento de tela
+        // Payload: { tipo:'screen-share', deviceId:string, tenantId:string }
+        // Fluxo: receiver entra na sala WebRTC e aguarda a oferta do emissor
+        // -----------------------------------------------------------------------
+        socket.on("cast:screen-share", function (payload) {
+          startWebRtcReceiver(payload.deviceId, payload.tenantId || TENANT_ID);
         });
 
         // -----------------------------------------------------------------------
@@ -579,13 +625,15 @@
 
       /**
        * switchScreen — alterna entre as telas mostrando apenas a selecionada.
-       * @param {'idle'|'timer'|'media'|'web'} name
+       * @param {'idle'|'timer'|'media'|'web'|'webrtc'} name
        */
       function switchScreen(name) {
         idleScreen.style.display = name === "idle" ? "flex" : "none";
         timerScreen.style.display = name === "timer" ? "flex" : "none";
         mediaScreen.style.display = name === "media" ? "block" : "none";
         webScreen.style.display = name === "web" ? "block" : "none";
+        document.getElementById("webrtc-screen").style.display =
+          name === "webrtc" ? "block" : "none";
       }
 
       /**
@@ -598,6 +646,143 @@
         if (state === "connected") statusDot.classList.add("connected");
         if (state === "error") statusDot.classList.add("error");
         statusText.textContent = text;
+      }
+
+      // ==========================================================================
+      // WEBRTC — RECEPÇÃO DE ESPELHAMENTO DE TELA
+      // ==========================================================================
+      // O backend é apenas um relay de sinalização (SDP/ICE).
+      // A mídia trafega diretamente P2P entre o emissor e esta TV.
+      // Namespace separado: /webrtc/:tenantId (não polui o /cast/:tenantId).
+      // ==========================================================================
+
+      var webrtcSocket = null; // Socket.IO para o namespace /webrtc
+      var peerConnection = null; // RTCPeerConnection ativa
+
+      // Configuração STUN pública (Google) — permite atravessar NAT básico.
+      // Em produção substitua por um TURN server para redes restritas.
+      var ICE_SERVERS = {
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      };
+
+      /**
+       * startWebRtcReceiver
+       * Conecta ao namespace /webrtc, entra na sala do dispositivo e
+       * aguarda a oferta SDP do emissor para estabelecer a conexão P2P.
+       */
+      function startWebRtcReceiver(deviceId, tenantId) {
+        // Para qualquer sessão WebRTC anterior
+        stopWebRtc();
+
+        switchScreen("webrtc");
+
+        // Conecta ao namespace de sinalização WebRTC
+        webrtcSocket = io(BACKEND_URL + "/webrtc/" + tenantId, {
+          transports: ["websocket"],
+        });
+
+        webrtcSocket.on("connect", function () {
+          // Entra na sala identificada pelo deviceId — mesmo ID usado pelo emissor
+          webrtcSocket.emit("webrtc:join", {
+            deviceId: deviceId,
+            role: "receiver",
+          });
+        });
+
+        // Recebe oferta SDP do emissor e cria resposta
+        webrtcSocket.on("webrtc:offer", function (data) {
+          handleOffer(data.offer, data.from);
+        });
+
+        // Recebe candidatos ICE do emissor
+        webrtcSocket.on("webrtc:ice-candidate", function (data) {
+          if (peerConnection && data.candidate) {
+            peerConnection
+              .addIceCandidate(new RTCIceCandidate(data.candidate))
+              .catch(function (e) {
+                console.warn("[webrtc] addIceCandidate:", e);
+              });
+          }
+        });
+
+        // Emissor encerrou o compartilhamento
+        webrtcSocket.on("webrtc:stop", function () {
+          stopWebRtc();
+          clearDisplay();
+        });
+
+        webrtcSocket.on("disconnect", function () {
+          console.warn("[webrtc] socket desconectado");
+        });
+      }
+
+      /**
+       * handleOffer
+       * Processa a oferta SDP recebida do emissor:
+       * 1. Cria RTCPeerConnection
+       * 2. Seta a oferta como remoteDescription
+       * 3. Cria answer e seta como localDescription
+       * 4. Envia o answer de volta ao emissor via backend
+       */
+      function handleOffer(offer, fromSocketId) {
+        peerConnection = new RTCPeerConnection(ICE_SERVERS);
+
+        // Quando o stream de vídeo chegar, exibe no elemento <video>
+        peerConnection.ontrack = function (event) {
+          var videoEl = document.getElementById("webrtc-video");
+          if (event.streams && event.streams[0]) {
+            videoEl.srcObject = event.streams[0];
+          }
+        };
+
+        // Envia candidatos ICE locais ao emissor via relay do backend
+        peerConnection.onicecandidate = function (event) {
+          if (event.candidate && webrtcSocket) {
+            webrtcSocket.emit("webrtc:ice-candidate", {
+              to: fromSocketId,
+              candidate: event.candidate,
+            });
+          }
+        };
+
+        // Seta oferta remota, cria answer e envia
+        peerConnection
+          .setRemoteDescription(new RTCSessionDescription(offer))
+          .then(function () {
+            return peerConnection.createAnswer();
+          })
+          .then(function (answer) {
+            return peerConnection.setLocalDescription(answer).then(function () {
+              return answer;
+            });
+          })
+          .then(function (answer) {
+            if (webrtcSocket) {
+              webrtcSocket.emit("webrtc:answer", {
+                to: fromSocketId,
+                answer: answer,
+              });
+            }
+          })
+          .catch(function (e) {
+            console.error("[webrtc] handleOffer:", e);
+          });
+      }
+
+      /**
+       * stopWebRtc — encerra conexão P2P e desconecta do namespace WebRTC
+       */
+      function stopWebRtc() {
+        if (peerConnection) {
+          peerConnection.close();
+          peerConnection = null;
+          var videoEl = document.getElementById("webrtc-video");
+          if (videoEl) videoEl.srcObject = null;
+        }
+        if (webrtcSocket) {
+          webrtcSocket.disconnect();
+          webrtcSocket = null;
+        }
       }
 
       function showError(msg) {
