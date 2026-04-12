@@ -99,8 +99,11 @@ export function registerRequestLoggerHook(app: FastifyInstance): void {
       // P2003 = Foreign key constraint violation (tenant não existe no banco)
       // Ignoramos silenciosamente para não poluir os logs com token expirado/inválido
       const code = (err as { code?: string })?.code;
-      if (code !== 'P2003') {
-        request.log.warn({ err }, 'request-logger: erro inesperado ao gravar log');
+      if (code !== "P2003") {
+        request.log.warn(
+          { err },
+          "request-logger: erro inesperado ao gravar log",
+        );
       }
     }
   });

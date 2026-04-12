@@ -28,6 +28,7 @@ import {
   Check,
   Power,
   History,
+  QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,8 @@ interface TvSlotProps {
   onWakeOnLan: (deviceId: string) => void;
   /** Chamado ao clicar em "Histórico" — abre TvHistoryModal. */
   onViewHistory: (device: TvDevice) => void;
+  /** Chamado ao clicar em "Parear" — abre PairTvModal com QR code. */
+  onPairDevice: (device: TvDevice) => void;
 }
 
 // =============================================================================
@@ -70,6 +73,7 @@ export function TvSlot({
   onEditDevice,
   onWakeOnLan,
   onViewHistory,
+  onPairDevice,
 }: TvSlotProps) {
   // Estado local para feedback de "IP copiado"
   // POR QUE local? Cada slot tem feedback independente — copiar IP do slot 1
@@ -248,6 +252,17 @@ export function TvSlot({
           title="Ver histórico de comandos"
         >
           <History className="h-3.5 w-3.5" />
+        </Button>
+
+        {/* Parear TV — gera QR code + URL para o receiver.html */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          onClick={() => onPairDevice(device)}
+          title="Parear TV (gerar QR code)"
+        >
+          <QrCode className="h-3.5 w-3.5" />
         </Button>
 
         {/* Editar dados da TV */}

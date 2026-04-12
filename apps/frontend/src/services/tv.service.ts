@@ -28,6 +28,7 @@ import type {
   TvDevice,
   TvDeviceListResponse,
   RegisterTvDeviceInput,
+  PairDeviceResponse,
   ControlTvInput,
   ControlTvResponse,
   DiscoveredDevice,
@@ -244,5 +245,36 @@ export async function castToSocket(payload: {
   label?: string;
 }): Promise<{ mensagem: string }> {
   const response = await api.post<{ mensagem: string }>("/tv/cast", payload);
+  return response.data;
+}
+
+// =============================================================================
+// FUNÇÃO: pairDevice
+// =============================================================================
+// Gera um NOVO socket_token para a TV e retorna o QR code + receiverUrl.
+// O token anterior é invalidado imediatamente (desconecta receiver atual).
+// Use quando precisar reparear a TV (ex: troca de equipamento, token comprometido).
+// =============================================================================
+export async function pairDevice(
+  deviceId: string,
+): Promise<PairDeviceResponse> {
+  const response = await api.post<PairDeviceResponse>(
+    `/tv/devices/${deviceId}/pair`,
+  );
+  return response.data;
+}
+
+// =============================================================================
+// FUNÇÃO: getDeviceToken
+// =============================================================================
+// Retorna o token ATUAL da TV com o QR code — SEM rotacionar.
+// Use para exibir o QR code novamente sem desconectar a TV que já está pareada.
+// =============================================================================
+export async function getDeviceToken(
+  deviceId: string,
+): Promise<PairDeviceResponse> {
+  const response = await api.get<PairDeviceResponse>(
+    `/tv/devices/${deviceId}/token`,
+  );
   return response.data;
 }

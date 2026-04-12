@@ -16,6 +16,7 @@
 // =============================================================================
 
 import { FastifyRequest, FastifyReply } from "fastify";
+import QRCode from "qrcode";
 import {
   RegisterTvDeviceSchema,
   UpdateTvDeviceSchema,
@@ -58,7 +59,12 @@ export async function listDevices(
   const result = await findAllTvDevices(schemaName);
 
   return reply.send({
-    ...result,
+    devices: result.devices.map((d) => ({
+      ...d,
+      is_online: d.status === "online",
+    })),
+    total: result.total,
+    limite_maximo: result.limite_maximo,
     slots_disponiveis: TV_MAX_LIMIT - result.total,
   });
 }
@@ -81,7 +87,7 @@ export async function getDevice(request: FastifyRequest, reply: FastifyReply) {
     });
   }
 
-  return reply.send(device);
+  return reply.send({ ...device, is_online: device.status === "online" });
 }
 
 // =============================================================================
@@ -642,6 +648,13 @@ export async function pairDevice(request: FastifyRequest, reply: FastifyReply) {
     `${backendBase}/static/receiver.html` +
     `?token=${newToken}&tenantId=${tenantId}&deviceId=${params.id}`;
 
+  // Gera QR code como data URL (base64 PNG) — a TV pode escanear para abrir a URL
+  const qrCodeDataUrl = await QRCode.toDataURL(receiverUrl, {
+    width: 280,
+    margin: 2,
+    errorCorrectionLevel: "M",
+  });
+
   request.log.info(
     `[TV Cast] 🔑 Novo token gerado para "${device.name}" — pareamento iniciado`,
   );
@@ -654,8 +667,9 @@ export async function pairDevice(request: FastifyRequest, reply: FastifyReply) {
     },
     socketToken: newToken,
     receiverUrl,
+    qrCodeDataUrl,
     instrucoes: [
-      "1. Copie a URL receiverUrl ou escaneie o QR code",
+      "1. Escaneie o QR code ou copie a URL receiverUrl",
       "2. Abra essa URL no navegador da TV",
       "3. A TV aparecerá como 'conectada' no painel após alguns segundos",
       "4. Agora use POST /tv/cast para enviar conteúdo em tempo real",
@@ -697,13 +711,22 @@ export async function getDeviceToken(
     `${backendBase}/static/receiver.html` +
     `?token=${device.socket_token}&tenantId=${tenantId}&deviceId=${params.id}`;
 
+  // Gera QR code como data URL (base64 PNG)
+  const qrCodeDataUrl = await QRCode.toDataURL(receiverUrl, {
+    width: 280,
+    margin: 2,
+    errorCorrectionLevel: "M",
+  });
+
   return reply.send({
+    mensagem: `Token atual da TV "${device.name}". Use POST /pair para gerar um novo.`,
     dispositivo: {
       id: device.id,
       name: device.name,
     },
     socketToken: device.socket_token,
     receiverUrl,
+    qrCodeDataUrl,
     aviso:
       "Para gerar um novo token (desconectar receiver atual), use POST /tv/devices/:id/pair",
   });

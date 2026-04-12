@@ -203,8 +203,11 @@ export interface TvDevice {
   name: string;
   ip_address: string;
   mac_address?: string;
-  is_online: boolean;
-  current_content?: string; // Última URL enviada para esta TV
+  status?: "online" | "offline"; // campo real do banco
+  is_online: boolean; // mapeado pelo backend: status === 'online'
+  socket_token?: string | null;
+  current_content?: string;
+  last_seen_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -288,6 +291,20 @@ export interface MediaFile {
 export interface MediaListResponse {
   files: MediaFile[];
   total: number;
+}
+
+/**
+ * Resposta de POST /tv/devices/:id/pair e GET /tv/devices/:id/token
+ * Contém o QR code e a URL para parear a TV ao receiver.html.
+ */
+export interface PairDeviceResponse {
+  mensagem: string;
+  dispositivo: { id: string; name: string };
+  socketToken: string | null;
+  receiverUrl: string;
+  qrCodeDataUrl: string; // data URL base64 PNG do QR code gerado pelo backend
+  instrucoes?: string[];
+  aviso?: string;
 }
 
 /**

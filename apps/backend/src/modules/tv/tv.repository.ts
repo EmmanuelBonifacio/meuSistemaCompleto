@@ -479,3 +479,43 @@ export async function findDeviceBySocketToken(
     return rows[0] ?? null;
   });
 }
+
+// =============================================================================
+// FUNÇÃO: setDeviceOnline
+// =============================================================================
+// Marca um dispositivo como 'online' e atualiza last_seen_at.
+// Chamada pelo tv.socket.ts quando o receiver.html envia tv:ready.
+// =============================================================================
+export async function setDeviceOnline(
+  schemaName: string,
+  deviceId: string,
+): Promise<void> {
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE tv_devices
+       SET status = 'online', last_seen_at = NOW(), updated_at = NOW()
+       WHERE id = $1::uuid`,
+      deviceId,
+    );
+  });
+}
+
+// =============================================================================
+// FUNÇÃO: setDeviceOffline
+// =============================================================================
+// Marca um dispositivo como 'offline'.
+// Chamada pelo tv.socket.ts quando o receiver.html desconecta do WebSocket.
+// =============================================================================
+export async function setDeviceOffline(
+  schemaName: string,
+  deviceId: string,
+): Promise<void> {
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE tv_devices
+       SET status = 'offline', updated_at = NOW()
+       WHERE id = $1::uuid`,
+      deviceId,
+    );
+  });
+}

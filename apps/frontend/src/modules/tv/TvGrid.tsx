@@ -46,6 +46,7 @@ import { TvHistoryModal } from "./TvHistoryModal";
 import { MediaGallery } from "./MediaGallery";
 import { TvAppsModal } from "./TvAppsModal";
 import { ScreenShareModal } from "./ScreenShareModal";
+import { PairTvModal } from "./PairTvModal";
 import * as tvService from "@/services/tv.service";
 import type { TvDevice } from "@/types/api";
 
@@ -75,6 +76,8 @@ export function TvGrid() {
   const [isMediaGalleryOpen, setIsMediaGalleryOpen] = useState(false);
   const [isTvAppsOpen, setIsTvAppsOpen] = useState(false);
   const [isScreenShareOpen, setIsScreenShareOpen] = useState(false);
+  // TV a ser pareada via QR code (null = modal fechado)
+  const [pairDevice, setPairDevice] = useState<TvDevice | null>(null);
 
   // IP pré-preenchido vindo da descoberta SSDP
   const [prefilledIp, setPrefilledIp] = useState<string>("");
@@ -313,6 +316,7 @@ export function TvGrid() {
                 onEditDevice={(dev) => setEditDevice(dev)}
                 onWakeOnLan={handleWakeOnLan}
                 onViewHistory={(dev) => setHistoryDevice(dev)}
+                onPairDevice={(dev) => setPairDevice(dev)}
               />
             ))}
       </div>
@@ -378,6 +382,12 @@ export function TvGrid() {
         onClose={() => setIsScreenShareOpen(false)}
         devices={safeDevices}
         onSuccess={handleSuccess}
+      />
+
+      {/* Pareamento de TV — QR code + receiverUrl */}
+      <PairTvModal
+        device={pairDevice}
+        onClose={() => setPairDevice(null)}
       />
     </div>
   );

@@ -59,6 +59,8 @@
 
 import { Server as SocketIoServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
+import { prisma } from "../../core/database/prisma";
+import { setDeviceOnline, setDeviceOffline } from "./tv.repository";
 
 // =============================================================================
 // TIPO: CastPayload
@@ -86,6 +88,7 @@ interface ConnectedDevice {
   socketId: string; // ID da conexão Socket.IO atual
   deviceName: string; // Nome da TV (para logs)
   connectedAt: Date; // Quando conectou (para diagnóstico)
+  schemaName: string; // Schema do tenant — necessário para atualizar status no DB
 }
 
 // =============================================================================
@@ -192,35 +195,64 @@ export function initSocketServer(
     //   Registramos no mapa activeConnections para saber para qual socket
     //   emitir quando o operador enviar um comando.
     // -----------------------------------------------------------------------
-    socket.on("tv:ready", (data: { deviceId: string; deviceName?: string }) => {
-      const { deviceId, deviceName = "TV" } = data;
+    socket.on(
+      "tv:ready",
+      async (data: { deviceId: string; deviceName?: string }) => {
+        const { deviceId, deviceName = "TV" } = data;
 
-      // Garante que existe um mapa para este tenant
-      if (!activeConnections.has(tenantId)) {
-        activeConnections.set(tenantId, new Map());
-      }
+        // Resolve o schemaName do tenant para poder atualizar o banco
+        let schemaName = "";
+        try {
+          const tenant = await prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { schemaName: true },
+          });
+          schemaName = tenant?.schemaName ?? "";
+        } catch {
+          console.warn(
+            `[TV Socket] Não foi possível resolver schema para tenant ${tenantId}`,
+          );
+        }
 
-      // Registra (ou atualiza) a conexão deste dispositivo
-      activeConnections.get(tenantId)!.set(deviceId, {
-        socketId: socket.id,
-        deviceName,
-        connectedAt: new Date(),
-      });
+        // Garante que existe um mapa para este tenant
+        if (!activeConnections.has(tenantId)) {
+          activeConnections.set(tenantId, new Map());
+        }
 
-      // A TV entra em uma "room" com seu próprio ID para emissão direta
-      socket.join(`device:${deviceId}`);
+        // Registra (ou atualiza) a conexão deste dispositivo
+        activeConnections.get(tenantId)!.set(deviceId, {
+          socketId: socket.id,
+          deviceName,
+          connectedAt: new Date(),
+          schemaName,
+        });
 
-      console.info(
-        `[TV Socket] ✅ TV "${deviceName}" (${deviceId}) pronta ` +
-          `no tenant ${tenantId}. Socket: ${socket.id}`,
-      );
+        // A TV entra em uma "room" com seu próprio ID para emissão direta
+        socket.join(`device:${deviceId}`);
 
-      // Confirma o pareamento para o receiver.html
-      socket.emit("cast:paired", {
-        mensagem: `Pareado com sucesso. Aguardando comandos...`,
-        deviceId,
-      });
-    });
+        console.info(
+          `[TV Socket] ✅ TV "${deviceName}" (${deviceId}) pronta ` +
+            `no tenant ${tenantId}. Socket: ${socket.id}`,
+        );
+
+        // Atualiza status para 'online' no banco de dados
+        if (schemaName) {
+          setDeviceOnline(schemaName, deviceId).catch((err) => {
+            console.warn(
+              `[TV Socket] Falha ao marcar device ${deviceId} online:`,
+              err,
+            );
+          });
+        }
+
+        // Confirma o pareamento para o receiver.html
+        socket.emit("cast:paired", {
+          mensagem: `Pareado com sucesso. Aguardando comandos...`,
+          deviceId,
+          deviceName,
+        });
+      },
+    );
 
     // -----------------------------------------------------------------------
     // EVENTO: tv:error
@@ -240,7 +272,7 @@ export function initSocketServer(
     // EVENTO: disconnect
     // -----------------------------------------------------------------------
     socket.on("disconnect", (reason) => {
-      // Remove o dispositivo do mapa de conexões ativas
+      // Remove o dispositivo do mapa de conexões ativas e marca offline no DB
       const tenantDevices = activeConnections.get(tenantId);
       if (tenantDevices) {
         for (const [deviceId, conn] of tenantDevices.entries()) {
@@ -250,6 +282,15 @@ export function initSocketServer(
               `[TV Socket] 📴 TV "${conn.deviceName}" (${deviceId}) ` +
                 `desconectou do tenant ${tenantId}. Motivo: ${reason}`,
             );
+            // Atualiza status para 'offline' no banco de dados
+            if (conn.schemaName) {
+              setDeviceOffline(conn.schemaName, deviceId).catch((err) => {
+                console.warn(
+                  `[TV Socket] Falha ao marcar device ${deviceId} offline:`,
+                  err,
+                );
+              });
+            }
             break;
           }
         }
