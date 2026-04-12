@@ -16,6 +16,7 @@ import {
   CriarPedidoSchema,
   AtualizarPedidoSchema,
   PedidoParamsSchema,
+  ListarPedidosQuerySchema,
 } from "./vendas.schema";
 import * as pedidosRepository from "./vendas.pedidos.repository";
 import { processarWebhookWhatsApp } from "./vendas.whatsapp.service";
@@ -68,8 +69,8 @@ export async function listPedidosVenda(
 ) {
   const schemaName = request.tenant!.schemaName;
 
-  // Filtro opcional por status: ?status=pendente
-  const { status } = request.query as { status?: string };
+  // Valida o filtro de status contra os valores permitidos
+  const { status } = ListarPedidosQuerySchema.parse(request.query);
 
   const pedidos = await pedidosRepository.findAllPedidosVenda(
     schemaName,

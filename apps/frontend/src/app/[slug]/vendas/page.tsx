@@ -24,12 +24,12 @@ import { CategoryRow } from "@/modules/vendas/components/CategoryRow";
 import { CartDrawer } from "@/modules/vendas/components/CartDrawer";
 import { FakeChatWidget } from "@/modules/vendas/components/FakeChatWidget";
 import { useCart } from "@/modules/vendas/hooks/useCart";
-import { listProdutosCatalogo } from "@/services/vendas.service";
+import {
+  listProdutosCatalogo,
+  getVendasConfig,
+} from "@/services/vendas.service";
 import type { ProdutoVenda } from "@/types/vendas.types";
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
-
-// Número WhatsApp lido da variável de ambiente pública
-const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "";
 
 // Ordem das categorias — Lançamentos SEMPRE primeiro
 const ORDEM_CATEGORIAS = [
@@ -47,6 +47,7 @@ export default function VendasPage() {
   const [produtos, setProdutos] = useState<ProdutoVenda[]>([]);
   const [busca, setBusca] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [whatsappNumber, setWhatsappNumber] = useState("");
 
   const {
     itens,
@@ -71,6 +72,17 @@ export default function VendasPage() {
       )
       .finally(() => setIsLoading(false));
   }, []);
+
+  // Carrega o número de WhatsApp configurado pelo tenant
+  useEffect(() => {
+    getVendasConfig(params.slug)
+      .then((cfg) => {
+        if (cfg.whatsapp_number) setWhatsappNumber(cfg.whatsapp_number);
+      })
+      .catch(() => {
+        // Silencioso — sem número configurado, botões ficam ocultos
+      });
+  }, [params.slug]);
 
   // -------------------------------------------------------------------------
   // Filtra produtos pela busca e agrupa por categoria (memoizado)
@@ -199,7 +211,7 @@ export default function VendasPage() {
                   key={categoria}
                   categoria={categoria}
                   produtos={produtosDaCategoria}
-                  whatsappNumber={WHATSAPP_NUMBER}
+                  whatsappNumber={whatsappNumber}
                   onAdicionarCarrinho={adicionarItem}
                 />
               ),
@@ -232,7 +244,7 @@ export default function VendasPage() {
         onClose={() => setIsCartOpen(false)}
         itens={itens}
         totalValor={totalValor}
-        whatsappNumber={WHATSAPP_NUMBER}
+        whatsappNumber={whatsappNumber}
         slug={params.slug}
         onAtualizarQuantidade={atualizarQuantidade}
         onRemoverItem={removerItem}
@@ -240,7 +252,7 @@ export default function VendasPage() {
       />
 
       {/* ===== CHAT FAKE ===== */}
-      <FakeChatWidget whatsappNumber={WHATSAPP_NUMBER} />
+      <FakeChatWidget whatsappNumber={whatsappNumber} />
     </>
   );
 }

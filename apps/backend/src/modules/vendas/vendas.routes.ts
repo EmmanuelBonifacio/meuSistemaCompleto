@@ -51,7 +51,13 @@ async function publicTenantResolver(
   }
   const tenant = await prisma.tenant.findUnique({
     where: { slug },
-    select: { id: true, name: true, slug: true, schemaName: true, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      schemaName: true,
+      isActive: true,
+    },
   });
   if (!tenant) {
     return reply.status(404).send({
@@ -68,6 +74,23 @@ async function publicTenantResolver(
     });
   }
   request.tenant = tenant;
+}
+
+// =============================================================================
+// MIDDLEWARE: publicOrTenantResolver
+// =============================================================================
+// Resolver combinado para a rota GET /vendas/config:
+//   - Se houver Authorization JWT → resolve tenant pelo token (admin logado)
+//   - Caso contrário                → usa publicTenantResolver (?slug= obrigatório)
+async function publicOrTenantResolver(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const auth = request.headers.authorization;
+  if (auth && auth.startsWith("Bearer ")) {
+    return tenantMiddleware(request, reply);
+  }
+  return publicTenantResolver(request, reply);
 }
 
 // =============================================================================
@@ -161,5 +184,22 @@ export async function vendasRoutes(fastify: FastifyInstance) {
   fastify.get("/resumo", {
     preHandler: moduleGuard,
     handler: pedidosController.getResumoVendas,
+  });
+
+  // GET /vendas/config?slug=<tenant-slug>
+  // Retorna as configurações públicas da loja (ex: número do WhatsApp).
+  // Suporta dois modos:
+  //   - Com Authorization JWT  → resolve tenant pelo token (admin logado)
+  //   - Sem Authorization + ?slug= → resolve pelo slug (catálogo público)
+  fastify.get("/config", {
+    preHandler: [publicOrTenantResolver],
+    handler: vendasController.getVendasConfig,
+  });
+
+  // PUT /vendas/config
+  // Atualiza as configurações da loja (protegido — apenas admin do tenant)
+  fastify.put("/config", {
+    preHandler: moduleGuard,
+    handler: vendasController.updateVendasConfig,
   });
 }

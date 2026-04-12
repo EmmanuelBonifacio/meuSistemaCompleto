@@ -422,6 +422,25 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     `CREATE INDEX IF NOT EXISTS idx_venda_pedidos_whatsapp
       ON "${schemaName}".venda_pedidos (numero_whatsapp)
       WHERE numero_whatsapp IS NOT NULL`,
+
+    // -----------------------------------------------------------------
+    // TABELA: venda_config
+    // -----------------------------------------------------------------
+    // Configurações do módulo de vendas por tenant.
+    // Sempre terá exatamente UMA linha (id = 1), garantido por CHECK constraint.
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".venda_config (
+      id              INTEGER     PRIMARY KEY DEFAULT 1,
+      whatsapp_number VARCHAR(20),
+      nome_loja       VARCHAR(255),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT venda_config_single_row CHECK (id = 1)
+    )`,
+
+    // Garante que a linha de configuração sempre exista
+    `INSERT INTO "${schemaName}".venda_config (id)
+      VALUES (1)
+      ON CONFLICT DO NOTHING`,
   ];
 }
 

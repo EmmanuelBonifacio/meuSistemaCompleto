@@ -198,3 +198,33 @@ export async function getResumo(): Promise<ResumoVendas> {
   const response = await api.get<ResumoVendas>("/vendas/resumo");
   return response.data;
 }
+
+// =============================================================================
+// CONFIGURAÇÕES DA LOJA
+// =============================================================================
+
+/**
+ * Obtém as configurações da loja.
+ * - Com slug (catálogo público): chama GET /vendas/config?slug=... sem JWT
+ * - Sem slug (painel admin):     chama GET /vendas/config com JWT do tenant
+ */
+export async function getVendasConfig(
+  slug?: string,
+): Promise<{ whatsapp_number: string | null; nome_loja: string | null }> {
+  const response = await api.get<{
+    whatsapp_number: string | null;
+    nome_loja: string | null;
+  }>("/vendas/config", { params: slug ? { slug } : undefined });
+  return response.data;
+}
+
+/**
+ * Atualiza as configurações da loja (apenas admin do tenant).
+ */
+export async function updateVendasConfig(data: {
+  whatsapp_number?: string;
+  nome_loja?: string;
+}): Promise<{ mensagem: string }> {
+  const response = await api.put<{ mensagem: string }>("/vendas/config", data);
+  return response.data;
+}

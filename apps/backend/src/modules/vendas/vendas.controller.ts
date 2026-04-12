@@ -22,8 +22,10 @@ import {
   AtualizarProdutoVendaSchema,
   ProdutoVendaParamsSchema,
   ListarProdutosVendaQuerySchema,
+  AtualizarVendasConfigSchema,
 } from "./vendas.schema";
 import * as vendasRepository from "./vendas.repository";
+import { withTenantSchema } from "../../core/database/prisma";
 
 // Diretório onde as fotos dos produtos são salvas
 const UPLOADS_DIR = path.join(__dirname, "../../../..", "uploads", "vendas");
@@ -228,4 +230,54 @@ export async function uploadFotoProduto(
     foto_url: fotoUrl,
     produto,
   });
+}
+
+// =============================================================================
+// HANDLER: Obter Configurações do Módulo de Vendas
+// GET /vendas/config?slug=<tenant-slug>  — público
+// =============================================================================
+export async function getVendasConfig(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const schemaName = request.tenant!.schemaName;
+
+  const result = await withTenantSchema(schemaName, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<
+      { whatsapp_number: string | null; nome_loja: string | null }[]
+    >(
+      `SELECT whatsapp_number, nome_loja FROM "${schemaName}".venda_config WHERE id = 1`,
+    );
+    return rows[0] ?? { whatsapp_number: null, nome_loja: null };
+  });
+
+  return reply.status(200).send(result);
+}
+
+// =============================================================================
+// HANDLER: Atualizar Configurações do Módulo de Vendas
+// PUT /vendas/config  — protegido (moduleGuard)
+// =============================================================================
+export async function updateVendasConfig(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const schemaName = request.tenant!.schemaName;
+  const { whatsapp_number, nome_loja } = AtualizarVendasConfigSchema.parse(request.body);
+
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$queryRawUnsafe(
+      `UPDATE "${schemaName}".venda_config
+         SET whatsapp_number = $1,
+             nome_loja       = $2,
+             updated_at      = NOW()
+       WHERE id = 1`,
+      whatsapp_number ?? null,
+      nome_loja ?? null,
+    );
+  });
+
+  return reply
+    .status(200)
+    .send({ mensagem: "Configurações salvas com sucesso." });
 }

@@ -174,3 +174,33 @@ export type ListarProdutosVendaQuery = z.infer<
 export type CriarPedidoInput = z.infer<typeof CriarPedidoSchema>;
 export type AtualizarPedidoInput = z.infer<typeof AtualizarPedidoSchema>;
 export type ItemPedido = z.infer<typeof ItemPedidoSchema>;
+
+// =============================================================================
+// SCHEMA: Filtro de listagem de pedidos (rota admin)
+// =============================================================================
+export const ListarPedidosQuerySchema = z.object({
+  status: z
+    .enum(["pendente", "pago", "enviado", "finalizado", "cancelado"])
+    .optional(),
+});
+
+// =============================================================================
+// SCHEMA: Atualização das configurações do módulo
+// =============================================================================
+export const AtualizarVendasConfigSchema = z.object({
+  whatsapp_number: z
+    .string()
+    .max(20, "Número WhatsApp deve ter no máximo 20 caracteres")
+    .regex(/^\d+$/, "Número WhatsApp deve conter apenas dígitos")
+    .optional()
+    .nullable(),
+
+  nome_loja: z
+    .string()
+    .max(255, "Nome da loja deve ter no máximo 255 caracteres")
+    .trim()
+    .optional()
+    .nullable(),
+});
+
+export type AtualizarVendasConfigInput = z.infer<typeof AtualizarVendasConfigSchema>;

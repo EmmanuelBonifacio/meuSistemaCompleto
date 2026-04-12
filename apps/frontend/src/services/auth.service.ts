@@ -60,14 +60,16 @@ export async function login(
   // POST /auth/login valida o slug + email + senha via bcrypt e retorna
   // um JWT com o UUID real do tenant — necessário para o tenantMiddleware
   // localizar o tenant corretamente em todas as requisições subsequentes.
-  const response = await api.post<{ access_token: string; refresh_token: string; token_type: string; expires_in: number }>(
-    "/auth/login",
-    {
-      slug: tenantSlug,
-      email: credentials.email,
-      password: credentials.password,
-    },
-  );
+  const response = await api.post<{
+    access_token: string;
+    refresh_token: string;
+    token_type: string;
+    expires_in: number;
+  }>("/auth/login", {
+    slug: tenantSlug,
+    email: credentials.email,
+    password: credentials.password,
+  });
 
   const token = response.data.access_token;
 

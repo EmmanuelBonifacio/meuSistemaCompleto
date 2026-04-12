@@ -61,15 +61,15 @@ const MODULE_CARDS = {
   },
   vendas: {
     icon: ShoppingCart,
-    title: "SalesWpp",
+    title: "VendasWhats",
     description: "Catálogo de vendas público com checkout direto via WhatsApp.",
     color: "text-green-600",
     bg: "bg-green-50",
   },
   "vendas-admin": {
     icon: LayoutGrid,
-    title: "Vendas — Admin",
-    description: "Gerencie produtos, pedidos e métricas do módulo SalesWpp.",
+    title: "VendasWhats — Admin",
+    description: "Gerencie produtos, pedidos e métricas do módulo VendasWhats.",
     color: "text-green-700",
     bg: "bg-green-100",
     href: "vendas/admin",

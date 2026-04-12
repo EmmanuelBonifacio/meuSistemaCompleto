@@ -54,7 +54,7 @@ const ALL_MODULES: Module[] = [
   {
     id: "vendas",
     name: "vendas",
-    displayName: "SalesWpp",
+    displayName: "VendasWhats",
     description: "Catálogo de vendas com checkout via WhatsApp",
   },
 ];

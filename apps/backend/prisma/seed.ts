@@ -46,8 +46,8 @@ async function main() {
     },
     {
       name: "vendas",
-      displayName: "Módulo de Vendas",
-      description: "Pedidos, orçamentos e gestão do pipeline de vendas.",
+      displayName: "VendasWhats",
+      description: "Catálogo de vendas público com checkout direto via WhatsApp.",
     },
     {
       name: "rh",

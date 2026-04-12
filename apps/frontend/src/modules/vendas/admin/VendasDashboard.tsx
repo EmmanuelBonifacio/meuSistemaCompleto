@@ -22,6 +22,8 @@ import {
   Trash2,
   Loader2,
   RefreshCw,
+  Settings,
+  Save,
 } from "lucide-react";
 import Image from "next/image";
 import type {
@@ -35,6 +37,8 @@ import {
   listPedidos,
   getResumo,
   deleteProduto,
+  getVendasConfig,
+  updateVendasConfig,
 } from "@/services/vendas.service";
 import { ProductModal } from "./ProductModal";
 import { OrdersTable } from "./OrdersTable";
@@ -72,7 +76,9 @@ function MetricCard({
 // COMPONENTE: VendasDashboard
 // =============================================================================
 export function VendasDashboard() {
-  const [aba, setAba] = useState<"pedidos" | "produtos">("pedidos");
+  const [aba, setAba] = useState<"pedidos" | "produtos" | "configuracoes">(
+    "pedidos",
+  );
   const [produtos, setProdutos] = useState<ProdutoVenda[]>([]);
   const [pedidos, setPedidos] = useState<PedidoVenda[]>([]);
   const [resumo, setResumo] = useState<ResumoVendas | null>(null);
@@ -82,6 +88,8 @@ export function VendasDashboard() {
     null,
   );
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
+  const [config, setConfig] = useState({ whatsapp_number: "", nome_loja: "" });
+  const [salvandoConfig, setSalvandoConfig] = useState(false);
 
   const formatarMoeda = (valor: number) =>
     valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -92,14 +100,24 @@ export function VendasDashboard() {
   const carregarDados = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [produtosRes, pedidosRes, resumoRes] = await Promise.all([
-        listProdutosAdmin(),
-        listPedidos(),
-        getResumo(),
-      ]);
+      const [produtosRes, pedidosRes, resumoRes, configRes] = await Promise.all(
+        [
+          listProdutosAdmin(),
+          listPedidos(),
+          getResumo(),
+          getVendasConfig().catch(() => ({
+            whatsapp_number: null,
+            nome_loja: null,
+          })),
+        ],
+      );
       setProdutos(produtosRes.data);
       setPedidos(pedidosRes.pedidos);
       setResumo(resumoRes);
+      setConfig({
+        whatsapp_number: configRes.whatsapp_number ?? "",
+        nome_loja: configRes.nome_loja ?? "",
+      });
     } catch (err) {
       console.error("[VendasDashboard] Erro ao carregar dados:", err);
     } finally {
@@ -236,6 +254,16 @@ export function VendasDashboard() {
             >
               Produtos
             </button>
+            <button
+              onClick={() => setAba("configuracoes")}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                aba === "configuracoes"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Configurações
+            </button>
           </div>
 
           <div className="flex gap-2">
@@ -268,6 +296,72 @@ export function VendasDashboard() {
               pedidos={pedidos}
               onPedidoAtualizado={handlePedidoAtualizado}
             />
+          )}
+
+          {/* ABA: Configurações */}
+          {aba === "configuracoes" && (
+            <div className="max-w-lg space-y-5 py-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Número do WhatsApp
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Número completo com DDI e DDD, sem espaços ou traços. Ex:
+                  5538998184735
+                </p>
+                <input
+                  type="text"
+                  value={config.whatsapp_number}
+                  onChange={(e) =>
+                    setConfig((c) => ({
+                      ...c,
+                      whatsapp_number: e.target.value,
+                    }))
+                  }
+                  placeholder="5538998184735"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome da Loja
+                </label>
+                <input
+                  type="text"
+                  value={config.nome_loja}
+                  onChange={(e) =>
+                    setConfig((c) => ({ ...c, nome_loja: e.target.value }))
+                  }
+                  placeholder="Minha Loja"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  setSalvandoConfig(true);
+                  try {
+                    await updateVendasConfig({
+                      whatsapp_number: config.whatsapp_number || undefined,
+                      nome_loja: config.nome_loja || undefined,
+                    });
+                    alert("Configurações salvas com sucesso!");
+                  } catch {
+                    alert("Erro ao salvar. Tente novamente.");
+                  } finally {
+                    setSalvandoConfig(false);
+                  }
+                }}
+                disabled={salvandoConfig}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+              >
+                {salvandoConfig ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Salvar Configurações
+              </button>
+            </div>
           )}
 
           {/* ABA: Produtos */}
