@@ -30,6 +30,7 @@ import { adminRoutes } from "./admin/admin.routes";
 import { adminAuthRoutes } from "./admin/admin.auth.routes";
 import { tvRoutes } from "./modules/tv/tv.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
+import { vendasRoutes } from "./modules/vendas/vendas.routes";
 import { registerRequestLoggerHook } from "./core/middleware/request-logger.hook";
 
 // =============================================================================
@@ -344,6 +345,9 @@ async function buildServer() {
   // Módulo de Controle de Telas (Digital Signage)
   await app.register(tvRoutes, { prefix: "/tv" });
 
+  // Módulo SalesWpp — Catálogo de Vendas com Checkout via WhatsApp
+  await app.register(vendasRoutes, { prefix: "/vendas" });
+
   // ==========================================================================
   // PAINEL ADMIN — LOGIN PÚBLICO (sem middleware)
   // ==========================================================================
@@ -537,6 +541,36 @@ async function start() {
     );
     console.log(
       `   GET    /static/receiver.html          → App para o browser da TV`,
+    );
+    console.log(`\n   --- MÓDULO: SALESWPP (VENDAS VIA WHATSAPP) ---`);
+    console.log(`   GET    /vendas/produtos               → Catálogo público`);
+    console.log(
+      `   GET    /vendas/produtos/admin         → Lista admin (auth)`,
+    );
+    console.log(
+      `   POST   /vendas/produtos               → Criar produto (auth)`,
+    );
+    console.log(
+      `   PUT    /vendas/produtos/:id           → Atualizar produto (auth)`,
+    );
+    console.log(
+      `   POST   /vendas/produtos/:id/foto      → Upload foto (auth)`,
+    );
+    console.log(
+      `   DELETE /vendas/produtos/:id           → Deletar produto (auth)`,
+    );
+    console.log(
+      `   POST   /vendas/pedidos                → Criar pedido (público)`,
+    );
+    console.log(
+      `   GET    /vendas/pedidos                → Listar pedidos (auth)`,
+    );
+    console.log(
+      `   PUT    /vendas/pedidos/:id            → Atualizar pedido (auth)`,
+    );
+    console.log(`   GET    /vendas/resumo                 → Métricas (auth)`);
+    console.log(
+      `   POST   /vendas/webhook/whatsapp       → Webhook WPP (público)`,
     );
     if (process.env.NODE_ENV === "development") {
       console.log(`\n   --- ROTAS DE DEV ---`);

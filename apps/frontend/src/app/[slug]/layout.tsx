@@ -33,16 +33,19 @@ export default function TenantLayout({
   // Rota de login não precisa de proteção — o usuário ainda não tem token
   const isLoginPage = pathname === `/${slug}/login`;
 
+  // Catálogo público de vendas — sem autenticação (exceto /vendas/admin que tem seu próprio layout)
+  const isVendasPublica =
+    pathname.startsWith(`/${slug}/vendas`) &&
+    !pathname.startsWith(`/${slug}/vendas/admin`);
+
   // Estado de verificação de auth: null = checando, true = ok, false = sem auth
   const [authState, setAuthState] = useState<"checking" | "ok" | "redirect">(
     "checking",
   );
 
   useEffect(() => {
-    // Rota de login não requer verificação de token — o usuário ainda não autenticou.
-    // Sem este guard, teríamos um loop: layout redireciona para /login → layout
-    // verifica token → token ausente → redireciona para /login → ...
-    if (!slug || isLoginPage) return;
+    // Rota de login e páginas públicas de vendas não requerem verificação de token
+    if (!slug || isLoginPage || isVendasPublica) return;
 
     // Persiste o slug atual para que os interceptors do Axios o utilizem
     if (typeof window !== "undefined") {
@@ -67,8 +70,8 @@ export default function TenantLayout({
   }, [slug, router, isLoginPage]);
 
   // Tela em branco durante a verificação (evita flash de conteúdo protegido).
-  // Na página de login não exibe spinner — renderiza os filhos diretamente.
-  if (isLoginPage) {
+  // Na página de login e nas páginas públicas de vendas não exibe spinner — renderiza os filhos diretamente.
+  if (isLoginPage || isVendasPublica) {
     return <>{children}</>;
   }
 

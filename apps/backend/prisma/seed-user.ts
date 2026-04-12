@@ -37,16 +37,16 @@ const prisma = new PrismaClient();
  *  ou via POST /dev/provisionar-tenant).
  *  Exemplo: "tv-corp", "academia-do-joao", "loja-exemplo"
  */
-const TENANT_SLUG = "tv-corp";
+const TENANT_SLUG = "loja-teste";
 
 /** E-mail do usuário a ser criado */
-const USER_EMAIL = "admin@tv-corp.com";
+const USER_EMAIL = "admin@loja-teste.com";
 
 /** Senha em texto puro — será convertida em bcrypt hash antes de salvar */
-const USER_PASSWORD = "minhasenha123";
+const USER_PASSWORD = "admin123";
 
 /** Nome de exibição do usuário */
-const USER_NAME = "Administrador TV Corp";
+const USER_NAME = "Administrador Loja Teste";
 
 /** Role do usuário dentro do tenant: "admin" ou "user" */
 const USER_ROLE = "admin";

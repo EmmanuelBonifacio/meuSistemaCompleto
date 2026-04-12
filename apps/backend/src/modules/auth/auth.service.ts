@@ -42,10 +42,22 @@ const BCRYPT_SALT_ROUNDS = 12;
 
 /**
  * Duração do access token JWT.
+ * Lido de JWT_ACCESS_TOKEN_EXPIRATION no .env (padrão: 1h).
  * Curto o suficiente para limitar a janela de exposição se roubado.
  * O refresh token renova automaticamente antes de expirar.
  */
-const ACCESS_TOKEN_EXPIRATION = "15m";
+const ACCESS_TOKEN_EXPIRATION =
+  process.env.JWT_ACCESS_TOKEN_EXPIRATION ?? "1h";
+
+// Converts the expiration string to seconds for the expires_in response field.
+// Supports formats: "Xh", "Xm", "Xs", or a raw number string (seconds).
+function parseExpirationToSeconds(exp: string): number {
+  if (/^\d+h$/.test(exp)) return parseInt(exp) * 3600;
+  if (/^\d+m$/.test(exp)) return parseInt(exp) * 60;
+  if (/^\d+s$/.test(exp)) return parseInt(exp);
+  const parsed = parseInt(exp);
+  return isNaN(parsed) ? 3600 : parsed;
+}
 
 /**
  * Duração do refresh token (em dias).
@@ -146,7 +158,7 @@ export function generateTokenPair(
     access_token,
     refresh_token,
     token_type: "Bearer",
-    expires_in: 15 * 60, // 900 segundos = 15 minutos
+    expires_in: parseExpirationToSeconds(ACCESS_TOKEN_EXPIRATION),
   };
 }
 

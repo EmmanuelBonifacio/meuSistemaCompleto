@@ -39,6 +39,7 @@ import type { ApiError } from "@/types/api";
 // Prefixo '@saas/' evita colisão com outras libs que possam usar 'token'.
 export const TOKEN_KEY = "@saas/token";
 export const TENANT_SLUG_KEY = "@saas/tenant-slug";
+export const ADMIN_TOKEN_KEY = "@saas/admin-token";
 
 // =============================================================================
 // CRIAÇÃO DA INSTÂNCIA AXIOS
@@ -76,19 +77,19 @@ const apiInstance: AxiosInstance = axios.create({
 // =============================================================================
 apiInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // typeof window !== 'undefined' garante que este código só roda no browser,
-    // não durante o SSR (Server-Side Rendering) do Next.js, onde localStorage
-    // não existe.
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem(TOKEN_KEY);
+      // Rotas do painel admin usam o token de superadmin (ADMIN_TOKEN_KEY).
+      // Todas as outras rotas usam o token de tenant (TOKEN_KEY).
+      // Isso evita que o login de superadmin sobrescreva o JWT do tenant.
+      const isAdminRoute = config.url?.startsWith("/admin");
+      const tokenKey = isAdminRoute ? ADMIN_TOKEN_KEY : TOKEN_KEY;
+      const token = localStorage.getItem(tokenKey);
       if (token) {
-        // Padrão Bearer: "Bearer <token>" conforme RFC 6750
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
     return config;
   },
-  // Em caso de erro ao montar a própria requisição:
   (error) => Promise.reject(error),
 );
 

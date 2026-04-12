@@ -30,7 +30,7 @@ interface TenantFormProps {
 }
 
 // Módulos disponíveis para seleção ao criar o tenant
-const AVAILABLE_MODULES = ["tv", "estoque", "financeiro"];
+const AVAILABLE_MODULES = ["tv", "estoque", "financeiro", "vendas"];
 
 export function TenantForm({ isOpen, onClose, onSuccess }: TenantFormProps) {
   const [name, setName] = useState("");

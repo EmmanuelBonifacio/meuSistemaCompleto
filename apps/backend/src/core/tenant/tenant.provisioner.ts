@@ -336,6 +336,92 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // Índice para limpeza periódica de tokens expirados / listagem por usuário
     `CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
       ON "${schemaName}".refresh_tokens (user_id)`,
+
+    // -----------------------------------------------------------------
+    // TABELA: venda_produtos (Módulo SalesWpp — Catálogo de Vendas)
+    // -----------------------------------------------------------------
+    // Armazena os produtos exibidos na página de vendas pública do tenant.
+    // Cada tenant tem seu próprio catálogo, isolado no seu schema.
+    //
+    // CAMPOS:
+    //   nome             → nome do produto exibido no catálogo
+    //   descricao        → texto descritivo do produto
+    //   preco            → preço original
+    //   preco_promocional→ preço com desconto (opcional — exibido em "Promoções")
+    //   categoria        → fileira onde o produto aparece (ex: lancamentos, mais-vendidos)
+    //   foto_url         → URL pública da imagem do produto
+    //   ativo            → controla se aparece no catálogo público (false = oculto)
+    //   destaque         → exibe em destaque dentro da categoria (topo da fileira)
+    //   ordem            → posição na fileira (menor valor = mais à esquerda)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".venda_produtos (
+      id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+      nome              VARCHAR(255)  NOT NULL,
+      descricao         TEXT,
+      preco             DECIMAL(10,2) NOT NULL DEFAULT 0.00
+                        CONSTRAINT venda_produtos_preco_positivo CHECK (preco >= 0),
+      preco_promocional DECIMAL(10,2)
+                        CONSTRAINT venda_produtos_preco_promo_positivo CHECK (preco_promocional >= 0),
+      categoria         VARCHAR(50)   NOT NULL DEFAULT 'lancamentos',
+      foto_url          TEXT,
+      ativo             BOOLEAN       NOT NULL DEFAULT true,
+      destaque          BOOLEAN       NOT NULL DEFAULT false,
+      ordem             INTEGER       NOT NULL DEFAULT 0,
+      created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    )`,
+
+    // Índice para listagem do catálogo público (produtos ativos por categoria)
+    `CREATE INDEX IF NOT EXISTS idx_venda_produtos_catalogo
+      ON "${schemaName}".venda_produtos (categoria, ativo, ordem ASC)`,
+
+    // Índice para destaques (lançamentos em destaque aparecem primeiro)
+    `CREATE INDEX IF NOT EXISTS idx_venda_produtos_destaque
+      ON "${schemaName}".venda_produtos (destaque)
+      WHERE destaque = true`,
+
+    // -----------------------------------------------------------------
+    // TABELA: venda_pedidos (Módulo SalesWpp — Pedidos via WhatsApp)
+    // -----------------------------------------------------------------
+    // Registra cada pedido iniciado pelo visitante ao clicar em
+    // "Finalizar no WhatsApp". Permite ao admin acompanhar, marcar como
+    // pago, enviado ou finalizado — e adicionar notas de entrega.
+    //
+    // POR QUE itens_json É JSONB E NÃO UMA TABELA SEPARADA?
+    //   O carrinho é capturado no momento da compra (snapshot imutável).
+    //   Se o produto for editado/deletado depois, o histórico do pedido
+    //   deve preservar os preços e nomes originais do momento da venda.
+    //   JSONB garante esse snapshot sem precisar de outra tabela.
+    //
+    // CAMPOS:
+    //   numero_whatsapp → telefone do comprador (pode ser null se não capturado)
+    //   itens_json      → snapshot do carrinho: [{produto_id, nome, preco, quantidade}]
+    //   total           → valor total do pedido no momento da compra
+    //   status          → ciclo de vida: pendente → pago → enviado → finalizado
+    //   notas           → observações do admin (ex: "Entregue em 12/04", "Pix recebido")
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".venda_pedidos (
+      id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+      numero_whatsapp VARCHAR(20),
+      itens_json      JSONB         NOT NULL DEFAULT '[]'::jsonb,
+      total           DECIMAL(10,2) NOT NULL DEFAULT 0.00
+                      CONSTRAINT venda_pedidos_total_positivo CHECK (total >= 0),
+      status          VARCHAR(20)   NOT NULL DEFAULT 'pendente'
+                      CONSTRAINT venda_pedidos_status_check
+                      CHECK (status IN ('pendente', 'pago', 'enviado', 'finalizado', 'cancelado')),
+      notas           TEXT,
+      created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    )`,
+
+    // Índice para listar pedidos por status no painel admin
+    `CREATE INDEX IF NOT EXISTS idx_venda_pedidos_status
+      ON "${schemaName}".venda_pedidos (status, created_at DESC)`,
+
+    // Índice para busca por número do WhatsApp (localizar pedidos de um cliente)
+    `CREATE INDEX IF NOT EXISTS idx_venda_pedidos_whatsapp
+      ON "${schemaName}".venda_pedidos (numero_whatsapp)
+      WHERE numero_whatsapp IS NOT NULL`,
   ];
 }
 

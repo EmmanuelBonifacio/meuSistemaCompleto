@@ -13,9 +13,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { LayoutDashboard, Building2, LogOut, Shield } from "lucide-react";
-import { TOKEN_KEY } from "@/services/api";
+import { ADMIN_TOKEN_KEY } from "@/services/api";
 import { isJwtExpired, decodeJwt } from "@/lib/utils";
-import { logout } from "@/services/auth.service";
+import { logout, adminLogout } from "@/services/auth.service";
 import type { JwtPayload } from "@/types/api";
 
 const NAV_ITEMS = [
@@ -43,7 +43,7 @@ export default function AdminLayout({
 
     if (typeof window === "undefined") return;
 
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem(ADMIN_TOKEN_KEY);
     if (!token || isJwtExpired(token)) {
       router.replace("/admin/login");
       setAuthState("denied");
@@ -60,7 +60,7 @@ export default function AdminLayout({
   }, [router, pathname]);
 
   function handleLogout() {
-    logout();
+    adminLogout();
     router.push("/admin/login");
   }
 

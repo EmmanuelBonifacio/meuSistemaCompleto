@@ -51,6 +51,12 @@ const ALL_MODULES: Module[] = [
     displayName: "Controle de TVs",
     description: "Gerencie telas e envie conteúdo remotamente",
   },
+  {
+    id: "vendas",
+    name: "vendas",
+    displayName: "SalesWpp",
+    description: "Catálogo de vendas com checkout via WhatsApp",
+  },
 ];
 
 // =============================================================================
@@ -87,6 +93,7 @@ export async function discoverActiveModules(): Promise<Module[]> {
     api.get("/estoque/produtos?limit=1"),
     api.get("/financeiro/transacoes?limit=1"),
     api.get("/tv/devices"),
+    api.get("/vendas/produtos/admin?limit=1"),
   ]);
 
   // 3. Mapear resultados: fulfilled (200) = ativo, rejected (403) = inativo

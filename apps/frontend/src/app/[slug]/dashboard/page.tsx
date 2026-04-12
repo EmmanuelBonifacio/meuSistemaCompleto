@@ -16,6 +16,8 @@ import {
   Tv2,
   Package,
   TrendingUp,
+  ShoppingCart,
+  LayoutGrid,
   ArrowRight,
   LayoutDashboard,
 } from "lucide-react";
@@ -56,6 +58,21 @@ const MODULE_CARDS = {
     description: "Acompanhe receitas, despesas e o saldo do seu negócio.",
     color: "text-emerald-600",
     bg: "bg-emerald-50",
+  },
+  vendas: {
+    icon: ShoppingCart,
+    title: "SalesWpp",
+    description: "Catálogo de vendas público com checkout direto via WhatsApp.",
+    color: "text-green-600",
+    bg: "bg-green-50",
+  },
+  "vendas-admin": {
+    icon: LayoutGrid,
+    title: "Vendas — Admin",
+    description: "Gerencie produtos, pedidos e métricas do módulo SalesWpp.",
+    color: "text-green-700",
+    bg: "bg-green-100",
+    href: "vendas/admin",
   },
 };
 
@@ -119,37 +136,52 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {modules.map((mod) => {
+          {modules.flatMap((mod) => {
             const modName =
               typeof mod === "string" ? mod : ((mod as any).name as string);
             const meta = MODULE_CARDS[modName as keyof typeof MODULE_CARDS];
-            if (!meta) return null;
-            const Icon = meta.icon;
+            if (!meta) return [];
 
-            return (
-              <Card
-                key={modName}
-                className="group hover:shadow-md transition-shadow"
-              >
-                <CardHeader>
-                  <div
-                    className={`h-10 w-10 rounded-lg ${meta.bg} flex items-center justify-center`}
-                  >
-                    <Icon className={`h-5 w-5 ${meta.color}`} />
-                  </div>
-                  <CardTitle className="mt-3 text-base">{meta.title}</CardTitle>
-                  <CardDescription>{meta.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`/${slug}/${modName}`}>
-                      Acessar
-                      <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            );
+            const cards = [{ key: modName, meta, href: `/${slug}/${modName}` }];
+
+            // Para o módulo vendas, adiciona card extra para o painel admin
+            if (modName === "vendas") {
+              const adminMeta =
+                MODULE_CARDS["vendas-admin" as keyof typeof MODULE_CARDS];
+              cards.push({
+                key: "vendas-admin",
+                meta: adminMeta,
+                href: `/${slug}/vendas/admin`,
+              });
+            }
+
+            return cards.map(({ key, meta: m, href }) => {
+              const Icon = m.icon;
+              return (
+                <Card
+                  key={key}
+                  className="group hover:shadow-md transition-shadow"
+                >
+                  <CardHeader>
+                    <div
+                      className={`h-10 w-10 rounded-lg ${m.bg} flex items-center justify-center`}
+                    >
+                      <Icon className={`h-5 w-5 ${m.color}`} />
+                    </div>
+                    <CardTitle className="mt-3 text-base">{m.title}</CardTitle>
+                    <CardDescription>{m.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={href}>
+                        Acessar
+                        <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            });
           })}
         </div>
       )}

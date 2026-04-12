@@ -17,7 +17,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { adminLogin } from "@/services/auth.service";
-import { TOKEN_KEY } from "@/services/api";
+import { ADMIN_TOKEN_KEY } from "@/services/api";
 import { isJwtExpired, decodeJwt } from "@/lib/utils";
 import type { JwtPayload } from "@/types/api";
 
@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
   // Se já está autenticado como superadmin, redireciona automaticamente
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem(ADMIN_TOKEN_KEY);
     if (!token || isJwtExpired(token)) return;
     const payload = decodeJwt<JwtPayload>(token);
     if (payload?.role === "superadmin") {
@@ -56,7 +56,7 @@ export default function AdminLoginPage() {
       const payload = await adminLogin({ email: email.trim(), password });
 
       if (payload.role !== "superadmin") {
-        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
         setError("Acesso negado: credenciais sem permissão de administrador.");
         return;
       }

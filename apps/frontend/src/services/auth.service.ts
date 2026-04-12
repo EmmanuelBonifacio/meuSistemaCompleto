@@ -22,7 +22,7 @@
 //   O comentário EM PRODUÇÃO indica onde/como mudar quando houver auth real.
 // =============================================================================
 
-import api, { TOKEN_KEY, TENANT_SLUG_KEY } from "./api";
+import api, { TOKEN_KEY, TENANT_SLUG_KEY, ADMIN_TOKEN_KEY } from "./api";
 import { decodeJwt, isJwtExpired } from "@/lib/utils";
 import type { MeResponse, DevTokenResponse, JwtPayload } from "@/types/api";
 
@@ -119,8 +119,8 @@ export async function adminLogin(credentials: {
 
   const { access_token } = response.data;
 
-  // Armazena o token no localStorage para os interceptadores do Axios
-  localStorage.setItem(TOKEN_KEY, access_token);
+  // Armazena em chave SEPARADA para não sobrescrever o JWT de tenant
+  localStorage.setItem(ADMIN_TOKEN_KEY, access_token);
 
   // Decodifica o JWT para retornar os dados do admin imediatamente
   const payload = decodeJwt<JwtPayload>(access_token);
@@ -142,6 +142,10 @@ export async function adminLogin(credentials: {
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(TENANT_SLUG_KEY);
+}
+
+export function adminLogout(): void {
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
 }
 
 // =============================================================================
