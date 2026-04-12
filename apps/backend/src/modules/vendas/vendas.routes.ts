@@ -202,4 +202,18 @@ export async function vendasRoutes(fastify: FastifyInstance) {
     preHandler: moduleGuard,
     handler: vendasController.updateVendasConfig,
   });
+
+  // POST /vendas/config/logo
+  // Upload da logo da loja (multipart/form-data)
+  fastify.post("/config/logo", {
+    preHandler: moduleGuard,
+    handler: vendasController.uploadLogoVendas,
+  });
+
+  // DELETE /vendas/config/logo
+  // Remove a logo da loja
+  fastify.delete("/config/logo", {
+    preHandler: moduleGuard,
+    handler: vendasController.removeLogoVendas,
+  });
 }

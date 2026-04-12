@@ -27,8 +27,10 @@ import {
 import * as vendasRepository from "./vendas.repository";
 import { withTenantSchema } from "../../core/database/prisma";
 
-// Diretório onde as fotos dos produtos são salvas
-const UPLOADS_DIR = path.join(__dirname, "../../../..", "uploads", "vendas");
+// Diretório onde as fotos/logos são salvas.
+// Usa process.cwd() (= apps/backend) para alinhar com o @fastify/static que
+// serve de path.resolve(process.cwd(), "../../uploads") → raiz do workspace.
+const UPLOADS_DIR = path.resolve(process.cwd(), "../../uploads/vendas");
 
 // =============================================================================
 // HANDLER: Listar Produtos (catálogo público — visitante)
@@ -233,25 +235,60 @@ export async function uploadFotoProduto(
 }
 
 // =============================================================================
+// HELPER: garante que venda_config existe para o schema do tenant.
+// Idempotente: CREATE TABLE IF NOT EXISTS + INSERT ... ON CONFLICT DO NOTHING.
+// Chamado nos handlers de GET e PUT /vendas/config para suportar tenants
+// provisionados antes desta coluna existir.
+// =============================================================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureVendaConfig(schemaName: string, tx: any): Promise<void> {
+  await tx.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "${schemaName}".venda_config (
+      id              INTEGER     PRIMARY KEY DEFAULT 1,
+      whatsapp_number VARCHAR(20),
+      nome_loja       VARCHAR(255),
+      logo_url        VARCHAR(500),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT venda_config_single_row CHECK (id = 1)
+    )
+  `);
+  await tx.$executeRawUnsafe(`
+    INSERT INTO "${schemaName}".venda_config (id)
+    VALUES (1)
+    ON CONFLICT DO NOTHING
+  `);
+}
+
+// =============================================================================
 // HANDLER: Obter Configurações do Módulo de Vendas
-// GET /vendas/config?slug=<tenant-slug>  — público
+// GET /vendas/config?slug=<tenant-slug>  — público (ou com JWT)
 // =============================================================================
 export async function getVendasConfig(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
   const schemaName = request.tenant!.schemaName;
+  const tenantName = request.tenant!.name;
 
-  const result = await withTenantSchema(schemaName, async (tx) => {
+  const config = await withTenantSchema(schemaName, async (tx) => {
+    await ensureVendaConfig(schemaName, tx);
     const rows = await tx.$queryRawUnsafe<
-      { whatsapp_number: string | null; nome_loja: string | null }[]
+      {
+        whatsapp_number: string | null;
+        nome_loja: string | null;
+        logo_url: string | null;
+      }[]
     >(
-      `SELECT whatsapp_number, nome_loja FROM "${schemaName}".venda_config WHERE id = 1`,
+      `SELECT whatsapp_number, nome_loja, logo_url
+         FROM "${schemaName}".venda_config
+        WHERE id = 1`,
     );
-    return rows[0] ?? { whatsapp_number: null, nome_loja: null };
+    return (
+      rows[0] ?? { whatsapp_number: null, nome_loja: null, logo_url: null }
+    );
   });
 
-  return reply.status(200).send(result);
+  return reply.status(200).send({ ...config, tenant_name: tenantName });
 }
 
 // =============================================================================
@@ -263,9 +300,12 @@ export async function updateVendasConfig(
   reply: FastifyReply,
 ) {
   const schemaName = request.tenant!.schemaName;
-  const { whatsapp_number, nome_loja } = AtualizarVendasConfigSchema.parse(request.body);
+  const { whatsapp_number, nome_loja } = AtualizarVendasConfigSchema.parse(
+    request.body,
+  );
 
   await withTenantSchema(schemaName, async (tx) => {
+    await ensureVendaConfig(schemaName, tx);
     await tx.$queryRawUnsafe(
       `UPDATE "${schemaName}".venda_config
          SET whatsapp_number = $1,
@@ -280,4 +320,89 @@ export async function updateVendasConfig(
   return reply
     .status(200)
     .send({ mensagem: "Configurações salvas com sucesso." });
+}
+
+// =============================================================================
+// HANDLER: Upload da Logo da Loja
+// POST /vendas/config/logo  — protegido (moduleGuard)
+// Recebe multipart/form-data com campo "file" e salva em /uploads/vendas/logos/
+// =============================================================================
+export async function uploadLogoVendas(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const schemaName = request.tenant!.schemaName;
+
+  const data = await request.file();
+
+  if (!data) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Bad Request",
+      message: "Nenhum arquivo enviado.",
+    });
+  }
+
+  const mimeTypesPermitidos = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+  ];
+  if (!mimeTypesPermitidos.includes(data.mimetype)) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Bad Request",
+      message:
+        "Tipo de arquivo inválido. Envie uma imagem (jpeg, png, webp, gif).",
+    });
+  }
+
+  const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
+  if (!fs.existsSync(LOGOS_DIR)) {
+    fs.mkdirSync(LOGOS_DIR, { recursive: true });
+  }
+
+  const ext = path.extname(data.filename).toLowerCase() || ".jpg";
+  const nomeArquivo = `logo-${schemaName}-${Date.now()}${ext}`;
+  const caminhoCompleto = path.join(LOGOS_DIR, nomeArquivo);
+
+  const buffer = await data.toBuffer();
+  fs.writeFileSync(caminhoCompleto, buffer);
+
+  const logoUrl = `/uploads/vendas/logos/${nomeArquivo}`;
+
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$queryRawUnsafe(
+      `UPDATE "${schemaName}".venda_config
+          SET logo_url = $1, updated_at = NOW()
+        WHERE id = 1`,
+      logoUrl,
+    );
+  });
+
+  return reply
+    .status(200)
+    .send({ mensagem: "Logo atualizada com sucesso.", logo_url: logoUrl });
+}
+
+// =============================================================================
+// HANDLER: Remover Logo da Loja
+// DELETE /vendas/config/logo  — protegido (moduleGuard)
+// =============================================================================
+export async function removeLogoVendas(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const schemaName = request.tenant!.schemaName;
+
+  await withTenantSchema(schemaName, async (tx) => {
+    await tx.$queryRawUnsafe(
+      `UPDATE "${schemaName}".venda_config
+          SET logo_url = NULL, updated_at = NOW()
+        WHERE id = 1`,
+    );
+  });
+
+  return reply.status(200).send({ mensagem: "Logo removida com sucesso." });
 }

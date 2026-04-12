@@ -21,13 +21,33 @@ const nextConfig = {
       process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000",
   },
 
-  // Imagens externas (logos de tenants, etc.)
+  // Imagens externas (logos de tenants, fotos de produtos, etc.)
+  // PRODUÇÃO: defina NEXT_PUBLIC_API_HOST com o hostname da API (ex: api.seudominio.com.br)
   images: {
     remotePatterns: [
+      // Desenvolvimento: backend local (http://localhost:3000/uploads/...)
       {
-        protocol: "https",
-        hostname: "**", // Ajuste para hosts específicos em produção
+        protocol: "http",
+        hostname: "localhost",
+        port: "3000",
+        pathname: "/uploads/**",
       },
+      // Produção: HTTPS com o hostname configurado em .env
+      ...(process.env.NEXT_PUBLIC_API_HOST
+        ? [
+            {
+              protocol: /** @type {"https"} */ ("https"),
+              hostname: process.env.NEXT_PUBLIC_API_HOST,
+              pathname: "/uploads/**",
+            },
+          ]
+        : [
+            // Fallback permissivo — SUBSTITUA pelo domínio real antes do deploy!
+            {
+              protocol: /** @type {"https"} */ ("https"),
+              hostname: "**",
+            },
+          ]),
     ],
   },
 

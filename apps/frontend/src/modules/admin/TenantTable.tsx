@@ -11,7 +11,14 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback } from "react";
-import { PlusCircle, Building2, AlertCircle, RefreshCw } from "lucide-react";
+import {
+  PlusCircle,
+  Building2,
+  AlertCircle,
+  RefreshCw,
+  ShieldOff,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +38,8 @@ export function TenantTable() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // id do tenant aguardando confirmação de suspend/reactivate
+  const [confirmStatusId, setConfirmStatusId] = useState<string | null>(null);
 
   // Modal de criação
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -65,12 +74,14 @@ export function TenantTable() {
   }, [successMsg]);
 
   async function handleToggleStatus(tenant: Tenant) {
-    const action = tenant.isActive ? "suspender" : "reativar";
-    const confirmed = window.confirm(
-      `Deseja ${action} o tenant "${tenant.name}"?`,
-    );
-    if (!confirmed) return;
-
+    // Primeiro clique: pede confirmação visual (sem window.confirm)
+    if (confirmStatusId !== tenant.id) {
+      setConfirmStatusId(tenant.id);
+      setTimeout(() => setConfirmStatusId(null), 4000);
+      return;
+    }
+    // Segundo clique: executa
+    setConfirmStatusId(null);
     try {
       if (tenant.isActive) {
         await suspendTenant(tenant.id);
@@ -188,40 +199,65 @@ export function TenantTable() {
                 {/* Linhas de dados */}
                 {!isLoading &&
                   tenants.map((tenant) => (
-                    <>
-                      <tr
-                        key={tenant.id}
-                        className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer"
-                        onClick={() => setSelectedTenant(tenant)}
+                    <tr
+                      key={tenant.id}
+                      className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => setSelectedTenant(tenant)}
+                    >
+                      {/* Nome */}
+                      <td className="px-4 py-3 font-medium">{tenant.name}</td>
+
+                      {/* Slug */}
+                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs hidden sm:table-cell">
+                        {tenant.slug}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <Badge variant={tenant.isActive ? "success" : "muted"}>
+                          {tenant.isActive ? "Ativo" : "Suspenso"}
+                        </Badge>
+                      </td>
+
+                      {/* Data de criação */}
+                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
+                        {formatDate(tenant.createdAt)}
+                      </td>
+
+                      {/* Ações */}
+                      <td
+                        className="px-4 py-3"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {/* Nome */}
-                        <td className="px-4 py-3 font-medium">{tenant.name}</td>
-
-                        {/* Slug */}
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs hidden sm:table-cell">
-                          {tenant.slug}
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-4 py-3">
-                          <Badge
-                            variant={tenant.isActive ? "success" : "muted"}
-                          >
-                            {tenant.isActive ? "Ativo" : "Suspenso"}
-                          </Badge>
-                        </td>
-
-                        {/* Data de criação */}
-                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
-                          {formatDate(tenant.createdAt)}
-                        </td>
-
-                        {/* Ações */}
-                        <td
-                          className="px-4 py-3"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex justify-end">
+                        <div className="flex justify-end">
+                          {confirmStatusId === tenant.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleToggleStatus(tenant)}
+                              >
+                                {tenant.isActive ? (
+                                  <>
+                                    <ShieldOff className="mr-1 h-3 w-3" />{" "}
+                                    Confirmar
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShieldCheck className="mr-1 h-3 w-3" />{" "}
+                                    Confirmar
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setConfirmStatusId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
                             <Button
                               variant={
                                 tenant.isActive ? "outline" : "secondary"
@@ -234,12 +270,22 @@ export function TenantTable() {
                                   : ""
                               }
                             >
-                              {tenant.isActive ? "Suspender" : "Reativar"}
+                              {tenant.isActive ? (
+                                <>
+                                  <ShieldOff className="mr-1 h-3 w-3" />{" "}
+                                  Suspender
+                                </>
+                              ) : (
+                                <>
+                                  <ShieldCheck className="mr-1 h-3 w-3" />{" "}
+                                  Reativar
+                                </>
+                              )}
                             </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   ))}
               </tbody>
             </table>

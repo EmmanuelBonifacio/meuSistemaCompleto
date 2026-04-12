@@ -60,6 +60,9 @@ export function ProductTable() {
   // Mensagem de sucesso temporária
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // ID do produto aguardando confirmação de exclusão (dois cliques)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   // ==========================================================================
   // Busca produtos quando page ou search mudam
   // useCallback memoriza a função para evitar loops no useEffect
@@ -97,7 +100,14 @@ export function ProductTable() {
   }
 
   async function handleDelete(product: Produto) {
-    if (!window.confirm(`Desativar "${product.name}"?`)) return;
+    // Primeiro clique: pede confirmação sem usar window.confirm
+    if (confirmDeleteId !== product.id) {
+      setConfirmDeleteId(product.id);
+      setTimeout(() => setConfirmDeleteId(null), 4000);
+      return;
+    }
+    // Segundo clique: executa
+    setConfirmDeleteId(null);
     try {
       await estoqueService.deleteProduct(product.id);
       showSuccess(`"${product.name}" desativado com sucesso.`);
@@ -288,15 +298,37 @@ export function ProductTable() {
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => handleDelete(product)}
-                            className="hover:text-destructive hover:bg-destructive/10"
-                            aria-label="Excluir produto"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {confirmDeleteId === product.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-6 text-[11px] px-2"
+                                onClick={() => handleDelete(product)}
+                              >
+                                Confirmar
+                              </Button>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                <ChevronLeft className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleDelete(product)}
+                              className="hover:text-destructive hover:bg-destructive/10"
+                              aria-label="Excluir produto"
+                              title="Clique para excluir"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

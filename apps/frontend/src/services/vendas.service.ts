@@ -126,7 +126,7 @@ export async function uploadFotoProduto(
     foto_url: string;
     produto: ProdutoVenda;
   }>(`/vendas/produtos/${id}/foto`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers: { "Content-Type": undefined },
   });
   return response.data;
 }
@@ -208,23 +208,55 @@ export async function getResumo(): Promise<ResumoVendas> {
  * - Com slug (catálogo público): chama GET /vendas/config?slug=... sem JWT
  * - Sem slug (painel admin):     chama GET /vendas/config com JWT do tenant
  */
-export async function getVendasConfig(
-  slug?: string,
-): Promise<{ whatsapp_number: string | null; nome_loja: string | null }> {
+export async function getVendasConfig(slug?: string): Promise<{
+  whatsapp_number: string | null;
+  nome_loja: string | null;
+  logo_url: string | null;
+  tenant_name: string | null;
+}> {
   const response = await api.get<{
     whatsapp_number: string | null;
     nome_loja: string | null;
+    logo_url: string | null;
+    tenant_name: string | null;
   }>("/vendas/config", { params: slug ? { slug } : undefined });
   return response.data;
 }
 
 /**
- * Atualiza as configurações da loja (apenas admin do tenant).
+ * Atualiza as configurações de texto da loja (apenas admin do tenant).
  */
 export async function updateVendasConfig(data: {
   whatsapp_number?: string;
   nome_loja?: string;
 }): Promise<{ mensagem: string }> {
   const response = await api.put<{ mensagem: string }>("/vendas/config", data);
+  return response.data;
+}
+
+/**
+ * Faz upload da logo da loja.
+ * Envia como multipart/form-data.
+ */
+export async function uploadLogoVendas(
+  arquivo: File,
+): Promise<{ mensagem: string; logo_url: string }> {
+  const formData = new FormData();
+  formData.append("file", arquivo);
+  const response = await api.post<{ mensagem: string; logo_url: string }>(
+    "/vendas/config/logo",
+    formData,
+    { headers: { "Content-Type": undefined } },
+  );
+  return response.data;
+}
+
+/**
+ * Remove a logo da loja.
+ */
+export async function removeLogoVendas(): Promise<{ mensagem: string }> {
+  const response = await api.delete<{ mensagem: string }>(
+    "/vendas/config/logo",
+  );
   return response.data;
 }

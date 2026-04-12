@@ -75,6 +75,9 @@ export function TransactionTable() {
   // Feedback após ação
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // ID da transação aguardando confirmação de exclusão (dois cliques)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   // Carrega transações e resumo financeiro
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -119,10 +122,14 @@ export function TransactionTable() {
   }, [successMsg]);
 
   async function handleDelete(tx: Transacao) {
-    const confirmed = window.confirm(
-      `Excluir a transação "${tx.description}"?\nEssa ação não pode ser desfeita.`,
-    );
-    if (!confirmed) return;
+    // Primeiro clique: pede confirmação sem usar window.confirm
+    if (confirmDeleteId !== tx.id) {
+      setConfirmDeleteId(tx.id);
+      setTimeout(() => setConfirmDeleteId(null), 4000);
+      return;
+    }
+    // Segundo clique: executa
+    setConfirmDeleteId(null);
     try {
       await deleteTransaction(tx.id);
       setSuccessMsg("Transação excluída com sucesso!");
@@ -348,15 +355,37 @@ export function TransactionTable() {
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => handleDelete(tx)}
-                            title="Excluir"
-                            className="text-destructive hover:text-destructive/80"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {confirmDeleteId === tx.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-6 text-[11px] px-2"
+                                onClick={() => handleDelete(tx)}
+                              >
+                                Confirmar
+                              </Button>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() => setConfirmDeleteId(null)}
+                                title="Cancelar"
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => handleDelete(tx)}
+                              title="Excluir"
+                              className="text-destructive hover:text-destructive/80"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

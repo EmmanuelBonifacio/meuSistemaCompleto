@@ -433,6 +433,7 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
       id              INTEGER     PRIMARY KEY DEFAULT 1,
       whatsapp_number VARCHAR(20),
       nome_loja       VARCHAR(255),
+      logo_url        VARCHAR(500),
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT venda_config_single_row CHECK (id = 1)
     )`,

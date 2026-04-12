@@ -24,6 +24,10 @@ import {
   RefreshCw,
   Settings,
   Save,
+  Upload,
+  X,
+  ImageIcon,
+  AlertTriangle,
 } from "lucide-react";
 import Image from "next/image";
 import type {
@@ -39,6 +43,8 @@ import {
   deleteProduto,
   getVendasConfig,
   updateVendasConfig,
+  uploadLogoVendas,
+  removeLogoVendas,
 } from "@/services/vendas.service";
 import { ProductModal } from "./ProductModal";
 import { OrdersTable } from "./OrdersTable";
@@ -88,8 +94,16 @@ export function VendasDashboard() {
     null,
   );
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
+  const [confirmandoDeletarId, setConfirmandoDeletarId] = useState<
+    string | null
+  >(null);
   const [config, setConfig] = useState({ whatsapp_number: "", nome_loja: "" });
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploadandoLogo, setUploadandoLogo] = useState(false);
+  const [removendoLogo, setRemovendoLogo] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
+  const [msgSucesso, setMsgSucesso] = useState<string | null>(null);
+  const [msgErro, setMsgErro] = useState<string | null>(null);
 
   const formatarMoeda = (valor: number) =>
     valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -108,6 +122,8 @@ export function VendasDashboard() {
           getVendasConfig().catch(() => ({
             whatsapp_number: null,
             nome_loja: null,
+            logo_url: null,
+            tenant_name: null,
           })),
         ],
       );
@@ -118,6 +134,7 @@ export function VendasDashboard() {
         whatsapp_number: configRes.whatsapp_number ?? "",
         nome_loja: configRes.nome_loja ?? "",
       });
+      setLogoUrl(configRes.logo_url ?? null);
     } catch (err) {
       console.error("[VendasDashboard] Erro ao carregar dados:", err);
     } finally {
@@ -130,20 +147,40 @@ export function VendasDashboard() {
   }, [carregarDados]);
 
   // -------------------------------------------------------------------------
-  // Deletar produto com confirmação
+  // Helpers de feedback
+  // -------------------------------------------------------------------------
+  const mostrarSucesso = (msg: string) => {
+    setMsgSucesso(msg);
+    setMsgErro(null);
+    setTimeout(() => setMsgSucesso(null), 4000);
+  };
+
+  const mostrarErro = (msg: string) => {
+    setMsgErro(msg);
+    setMsgSucesso(null);
+    setTimeout(() => setMsgErro(null), 5000);
+  };
+
+  // -------------------------------------------------------------------------
+  // Deletar produto com confirmação inline (dois cliques — sem window.confirm)
   // -------------------------------------------------------------------------
   const handleDeletar = async (produto: ProdutoVenda) => {
-    const confirmado = window.confirm(
-      `Tem certeza que deseja deletar o produto "${produto.nome}"? Esta ação é irreversível.`,
-    );
-    if (!confirmado) return;
-
+    // Primeiro clique: pede confirmação
+    if (confirmandoDeletarId !== produto.id) {
+      setConfirmandoDeletarId(produto.id);
+      // Auto-cancela após 4 segundos sem confirmação
+      setTimeout(() => setConfirmandoDeletarId(null), 4000);
+      return;
+    }
+    // Segundo clique: executa
+    setConfirmandoDeletarId(null);
     setDeletandoId(produto.id);
     try {
       await deleteProduto(produto.id);
       setProdutos((prev) => prev.filter((p) => p.id !== produto.id));
+      mostrarSucesso(`Produto "${produto.nome}" removido.`);
     } catch {
-      alert("Erro ao deletar produto. Tente novamente.");
+      mostrarErro("Erro ao deletar produto. Tente novamente.");
     } finally {
       setDeletandoId(null);
     }
@@ -196,6 +233,20 @@ export function VendasDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* ===== FEEDBACKS GLOBAIS ===== */}
+      {msgSucesso && (
+        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <Save className="h-4 w-4 shrink-0" />
+          {msgSucesso}
+        </div>
+      )}
+      {msgErro && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          {msgErro}
+        </div>
+      )}
+
       {/* ===== MÉTRICAS ===== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
@@ -300,7 +351,95 @@ export function VendasDashboard() {
 
           {/* ABA: Configurações */}
           {aba === "configuracoes" && (
-            <div className="max-w-lg space-y-5 py-2">
+            <div className="max-w-lg space-y-6 py-2">
+              {/* --- Logo da Loja --- */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Logo da Loja
+                </label>
+                <p className="text-xs text-gray-500">
+                  Aparece no catálogo público. A logo também define as cores
+                  automáticas da vitrine.
+                </p>
+
+                {/* Preview*/}
+                {logoUrl && (
+                  <div className="relative w-32 h-32 rounded-2xl border border-gray-200 overflow-hidden bg-gray-50">
+                    <Image
+                      src={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"}${logoUrl}`}
+                      alt="Logo da loja"
+                      fill
+                      className="object-contain p-2"
+                      sizes="128px"
+                      unoptimized
+                    />
+                    <button
+                      onClick={async () => {
+                        setRemovendoLogo(true);
+                        try {
+                          await removeLogoVendas();
+                          setLogoUrl(null);
+                          mostrarSucesso("Logo removida.");
+                        } catch {
+                          mostrarErro("Erro ao remover logo.");
+                        } finally {
+                          setRemovendoLogo(false);
+                        }
+                      }}
+                      disabled={removendoLogo}
+                      className="absolute top-1 right-1 bg-white/90 hover:bg-red-50 border border-gray-200 rounded-lg p-1 transition-colors"
+                      aria-label="Remover logo"
+                    >
+                      {removendoLogo ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
+                      ) : (
+                        <X className="w-3 h-3 text-gray-500 hover:text-red-600" />
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Upload button */}
+                <label className="flex items-center gap-2 w-fit cursor-pointer bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+                  {uploadandoLogo ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {logoUrl ? "Trocar logo" : "Enviar logo"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={uploadandoLogo}
+                    onChange={async (e) => {
+                      const arquivo = e.target.files?.[0];
+                      if (!arquivo) return;
+                      setUploadandoLogo(true);
+                      try {
+                        const res = await uploadLogoVendas(arquivo);
+                        setLogoUrl(res.logo_url);
+                        mostrarSucesso("Logo atualizada com sucesso!");
+                      } catch {
+                        mostrarErro("Erro ao enviar logo. Tente novamente.");
+                      } finally {
+                        setUploadandoLogo(false);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                </label>
+                {!logoUrl && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    Sem logo definida — o catálogo usará cores padrão
+                  </div>
+                )}
+              </div>
+
+              <hr className="border-gray-100" />
+
+              {/* --- WhatsApp --- */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Número do WhatsApp
@@ -311,17 +450,20 @@ export function VendasDashboard() {
                 </p>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={config.whatsapp_number}
                   onChange={(e) =>
                     setConfig((c) => ({
                       ...c,
-                      whatsapp_number: e.target.value,
+                      // Remove tudo que não for dígito para evitar erro de validação
+                      whatsapp_number: e.target.value.replace(/\D/g, ""),
                     }))
                   }
                   placeholder="5538998184735"
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
                 />
               </div>
+              {/* --- Nome da Loja --- */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nome da Loja
@@ -344,9 +486,11 @@ export function VendasDashboard() {
                       whatsapp_number: config.whatsapp_number || undefined,
                       nome_loja: config.nome_loja || undefined,
                     });
-                    alert("Configurações salvas com sucesso!");
-                  } catch {
-                    alert("Erro ao salvar. Tente novamente.");
+                    mostrarSucesso("Configurações salvas com sucesso!");
+                  } catch (err) {
+                    const msg =
+                      err instanceof Error ? err.message : "Erro ao salvar";
+                    mostrarErro(msg);
                   } finally {
                     setSalvandoConfig(false);
                   }
@@ -475,18 +619,42 @@ export function VendasDashboard() {
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
-                              <button
-                                onClick={() => handleDeletar(produto)}
-                                disabled={deletandoId === produto.id}
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                                aria-label="Deletar produto"
-                              >
-                                {deletandoId === produto.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4" />
-                                )}
-                              </button>
+                              {confirmandoDeletarId === produto.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleDeletar(produto)}
+                                    disabled={deletandoId === produto.id}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                                  >
+                                    {deletandoId === produto.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : null}
+                                    Confirmar
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setConfirmandoDeletarId(null)
+                                    }
+                                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleDeletar(produto)}
+                                  disabled={deletandoId === produto.id}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                  aria-label="Deletar produto"
+                                  title="Deletar produto"
+                                >
+                                  {deletandoId === produto.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
