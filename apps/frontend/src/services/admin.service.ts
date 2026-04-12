@@ -139,7 +139,7 @@ export async function toggleModule(
 ): Promise<{ mensagem: string; tenant: Tenant }> {
   const response = await api.patch<{ mensagem: string; tenant: Tenant }>(
     `/admin/tenants/${tenantId}/modules`,
-    { moduleName, isActive },
+    { moduleName, enabled: isActive },
   );
   return response.data;
 }

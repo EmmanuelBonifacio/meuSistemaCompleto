@@ -373,6 +373,8 @@ export async function uploadLogoVendas(
   const logoUrl = `/uploads/vendas/logos/${nomeArquivo}`;
 
   await withTenantSchema(schemaName, async (tx) => {
+    // Garante que a tabela e o registro existem antes de atualizar
+    await ensureVendaConfig(schemaName, tx);
     await tx.$queryRawUnsafe(
       `UPDATE "${schemaName}".venda_config
           SET logo_url = $1, updated_at = NOW()
@@ -397,6 +399,8 @@ export async function removeLogoVendas(
   const schemaName = request.tenant!.schemaName;
 
   await withTenantSchema(schemaName, async (tx) => {
+    // Garante que a tabela e o registro existem antes de atualizar
+    await ensureVendaConfig(schemaName, tx);
     await tx.$queryRawUnsafe(
       `UPDATE "${schemaName}".venda_config
           SET logo_url = NULL, updated_at = NOW()

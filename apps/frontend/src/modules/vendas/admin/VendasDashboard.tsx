@@ -35,6 +35,17 @@ import type {
   PedidoVenda,
   ResumoVendas,
 } from "@/types/vendas.types";
+
+// Raiz do backend — imagens são servidas por ele, não pelo frontend
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+
+// Constrói a URL completa para imagens armazenadas como caminhos relativos
+// ex: "/uploads/vendas/xxx.jpg" → "http://localhost:3000/uploads/vendas/xxx.jpg"
+function resolveImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  return `${API_BASE}${url}`;
+}
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
 import {
   listProdutosAdmin,
@@ -366,7 +377,7 @@ export function VendasDashboard() {
                 {logoUrl && (
                   <div className="relative w-32 h-32 rounded-2xl border border-gray-200 overflow-hidden bg-gray-50">
                     <Image
-                      src={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"}${logoUrl}`}
+                      src={resolveImageUrl(logoUrl)!}
                       alt="Logo da loja"
                       fill
                       className="object-contain p-2"
@@ -553,11 +564,12 @@ export function VendasDashboard() {
                               <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                                 {produto.foto_url ? (
                                   <Image
-                                    src={produto.foto_url}
+                                    src={resolveImageUrl(produto.foto_url)!}
                                     alt={produto.nome}
                                     fill
                                     className="object-cover"
                                     sizes="40px"
+                                    unoptimized
                                   />
                                 ) : (
                                   <Package className="w-5 h-5 text-gray-300 m-auto mt-2.5" />

@@ -22,6 +22,16 @@ import type {
   ProdutoVendaInput,
   CategoriaVenda,
 } from "@/types/vendas.types";
+
+// Raiz do backend — imagens são servidas por ele, não pelo frontend
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+
+// Constrói a URL completa para imagens armazenadas como caminhos relativos
+function resolveImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  return `${API_BASE}${url}`;
+}
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
 import {
   createProduto,
@@ -82,7 +92,8 @@ export function ProductModal({
         destaque: produto.destaque,
         ordem: produto.ordem,
       });
-      setFotoPreview(produto.foto_url);
+      // Resolve a URL para exibição correta — URLs relativas precisam do prefixo do backend
+      setFotoPreview(resolveImageUrl(produto.foto_url));
     } else {
       setForm(FORM_INICIAL);
       setFotoPreview(null);
@@ -207,7 +218,7 @@ export function ProductModal({
                   fill
                   className="object-cover"
                   sizes="512px"
-                  unoptimized={fotoPreview.startsWith("data:")}
+                  unoptimized
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400 group-hover:text-indigo-500 transition-colors">

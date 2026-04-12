@@ -39,7 +39,8 @@ export function ModuleToggle({
     setLoadingModuleId(mod.moduleId);
     try {
       // Inverte o estado atual via API admin
-      await toggleTenantModule(tenantId, mod.moduleId, !mod.isActive);
+      // Usa mod.module.name (ex: "estoque") pois o backend espera o nome do módulo, não o UUID
+      await toggleTenantModule(tenantId, mod.module.name, !mod.isActive);
       onToggled(); // Sobe para o pai recarregar a lista
     } catch (err) {
       console.error("Erro ao alternar módulo:", err);
