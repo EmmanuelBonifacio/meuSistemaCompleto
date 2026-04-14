@@ -11,8 +11,9 @@
 
 // =============================================================================
 // TIPOS: Categorias disponíveis
-// Deve espelhar CATEGORIAS_VENDA do vendas.schema.ts (backend)
 // =============================================================================
+// Mapa de labels para as categorias padrão. Categorias customizadas do tenant
+// usam o próprio nome digitado como label (exibido diretamente).
 export const CATEGORIAS_LABEL: Record<string, string> = {
   lancamentos: "Lançamentos",
   "mais-vendidos": "Mais Vendidos",
@@ -23,14 +24,8 @@ export const CATEGORIAS_LABEL: Record<string, string> = {
   servicos: "Serviços",
 };
 
-export type CategoriaVenda =
-  | "lancamentos"
-  | "mais-vendidos"
-  | "promocoes"
-  | "eletronicos"
-  | "vestuario"
-  | "acessorios"
-  | "servicos";
+// Categoria é string livre — o tenant define as suas no painel de Configurações.
+export type CategoriaVenda = string;
 
 // =============================================================================
 // INTERFACE: ProdutoVenda — produto exibido no catálogo de vendas

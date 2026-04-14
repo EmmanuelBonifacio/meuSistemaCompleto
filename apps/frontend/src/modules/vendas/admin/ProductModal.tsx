@@ -29,7 +29,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 // Constrói a URL completa para imagens armazenadas como caminhos relativos
 function resolveImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:")
+  )
+    return url;
   return `${API_BASE}${url}`;
 }
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
@@ -45,8 +50,9 @@ import {
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  produto?: ProdutoVenda | null; // null = modo criação, objeto = modo edição
+  produto?: ProdutoVenda | null;
   onSalvo: (produto: ProdutoVenda) => void;
+  categorias?: string[]; // categorias personalizadas do tenant
 }
 
 // Estado inicial do formulário
@@ -69,6 +75,7 @@ export function ProductModal({
   onClose,
   produto,
   onSalvo,
+  categorias,
 }: ProductModalProps) {
   const [form, setForm] = useState<ProdutoVendaInput>(FORM_INICIAL);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
@@ -353,11 +360,18 @@ export function ProductModal({
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-white"
               required
             >
-              {Object.entries(CATEGORIAS_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+              {categorias && categorias.length > 0
+                ? categorias.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {/* Usa label traduzido se existir, senão usa o nome direto */}
+                      {CATEGORIAS_LABEL[cat] ?? cat}
+                    </option>
+                  ))
+                : Object.entries(CATEGORIAS_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
             </select>
           </div>
 

@@ -44,8 +44,8 @@ const ORDEM_CATEGORIAS = [
 interface Paleta {
   primaria: string;
   secundaria: string;
-  clara: string;       // tint suave para fundos de seÃ§Ã£o
-  escura: string;      // shade para hover/botÃµes
+  clara: string; // tint suave para fundos de seÃ§Ã£o
+  escura: string; // shade para hover/botÃµes
   textoBranco: boolean; // contraste adequado para texto branco sobre primaria
 }
 
@@ -81,11 +81,21 @@ function misturarComBranco(hex: string, intensidade: number): string {
 
 function escurecerCor(hex: string, fator = 0.7): string {
   const [r, g, b] = hexToRgb(hex);
-  return rgbToHex(Math.round(r * fator), Math.round(g * fator), Math.round(b * fator));
+  return rgbToHex(
+    Math.round(r * fator),
+    Math.round(g * fator),
+    Math.round(b * fator),
+  );
 }
 
 function paletaDefault(): Paleta {
-  return { primaria: "#4f46e5", secundaria: "#7c3aed", clara: "#eef2ff", escura: "#3730a3", textoBranco: true };
+  return {
+    primaria: "#4f46e5",
+    secundaria: "#7c3aed",
+    clara: "#eef2ff",
+    escura: "#3730a3",
+    textoBranco: true,
+  };
 }
 
 function gerarPaleta(imageUrl: string): Promise<Paleta> {
@@ -96,8 +106,12 @@ function gerarPaleta(imageUrl: string): Promise<Paleta> {
       try {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
-        if (!ctx) { resolve(paletaDefault()); return; }
-        canvas.width = 80; canvas.height = 80;
+        if (!ctx) {
+          resolve(paletaDefault());
+          return;
+        }
+        canvas.width = 80;
+        canvas.height = 80;
         ctx.drawImage(img, 0, 0, 80, 80);
         const { data } = ctx.getImageData(0, 0, 80, 80);
         const mapa = new Map<string, number>();
@@ -114,10 +128,17 @@ function gerarPaleta(imageUrl: string): Promise<Paleta> {
           const key = `${r},${g},${b}`;
           mapa.set(key, (mapa.get(key) ?? 0) + 1);
         }
-        if (mapa.size === 0) { resolve(paletaDefault()); return; }
-        let maxCount = 0; let dominante = "79,70,229";
+        if (mapa.size === 0) {
+          resolve(paletaDefault());
+          return;
+        }
+        let maxCount = 0;
+        let dominante = "79,70,229";
         for (const [key, count] of mapa) {
-          if (count > maxCount) { maxCount = count; dominante = key; }
+          if (count > maxCount) {
+            maxCount = count;
+            dominante = key;
+          }
         }
         const [r, g, b] = dominante.split(",").map(Number);
         const primaria = rgbToHex(r, g, b);
@@ -129,7 +150,9 @@ function gerarPaleta(imageUrl: string): Promise<Paleta> {
           escura: escurecerCor(primaria, 0.58),
           textoBranco: lum < 0.35,
         });
-      } catch { resolve(paletaDefault()); }
+      } catch {
+        resolve(paletaDefault());
+      }
     };
     img.onerror = () => resolve(paletaDefault());
     img.src = imageUrl;
@@ -152,6 +175,8 @@ export default function VendasPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [paleta, setPaleta] = useState<Paleta>(paletaDefault());
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null);
+  const [ordemCategorias, setOrdemCategorias] =
+    useState<string[]>(ORDEM_CATEGORIAS);
   const categoriaRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const {
@@ -170,7 +195,9 @@ export default function VendasPage() {
   useEffect(() => {
     listProdutosCatalogo({ limit: 200, slug: params.slug })
       .then((res) => setProdutos(res.data))
-      .catch((err) => console.error("[VendasPage] Erro ao carregar produtos:", err))
+      .catch((err) =>
+        console.error("[VendasPage] Erro ao carregar produtos:", err),
+      )
       .finally(() => setIsLoading(false));
   }, [params.slug]);
 
@@ -181,6 +208,9 @@ export default function VendasPage() {
         if (cfg.whatsapp_number) setWhatsappNumber(cfg.whatsapp_number);
         setNomeLoja(cfg.nome_loja || cfg.tenant_name || params.slug);
         if (cfg.logo_url) setLogoUrl(cfg.logo_url);
+        if (cfg.categorias && cfg.categorias.length > 0) {
+          setOrdemCategorias(cfg.categorias);
+        }
       })
       .catch(() => setNomeLoja(params.slug));
   }, [params.slug]);
@@ -205,18 +235,18 @@ export default function VendasPage() {
       : produtos;
 
     const mapa = new Map<string, ProdutoVenda[]>();
-    for (const cat of ORDEM_CATEGORIAS) {
+    for (const cat of ordemCategorias) {
       const grupo = filtrados.filter((p) => p.categoria === cat);
       if (grupo.length > 0) mapa.set(cat, grupo);
     }
     for (const p of filtrados) {
-      if (!ORDEM_CATEGORIAS.includes(p.categoria)) {
+      if (!ordemCategorias.includes(p.categoria)) {
         const atual = mapa.get(p.categoria) ?? [];
         mapa.set(p.categoria, [...atual, p]);
       }
     }
     return mapa;
-  }, [produtos, busca]);
+  }, [produtos, busca, ordemCategorias]);
 
   const categoriasDisponiveis = Array.from(produtosPorCategoria.keys());
   const semResultados = busca.length > 0 && produtosPorCategoria.size === 0;
@@ -224,7 +254,10 @@ export default function VendasPage() {
 
   const scrollParaCategoria = (cat: string) => {
     setCategoriaAtiva(cat);
-    categoriaRefs.current[cat]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    categoriaRefs.current[cat]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
 
   return (
@@ -306,7 +339,8 @@ export default function VendasPage() {
         <div
           className="absolute inset-0 opacity-[0.07]"
           style={{
-            backgroundImage: "radial-gradient(circle, white 1.5px, transparent 1.5px)",
+            backgroundImage:
+              "radial-gradient(circle, white 1.5px, transparent 1.5px)",
             backgroundSize: "28px 28px",
           }}
         />
@@ -369,7 +403,10 @@ export default function VendasPage() {
         {/* Curva decorativa de transiÃ§Ã£o para o conteÃºdo */}
         <div
           className="h-10 bg-gray-50"
-          style={{ borderRadius: "60% 60% 0 0 / 100% 100% 0 0", transform: "scaleX(1.6)" }}
+          style={{
+            borderRadius: "60% 60% 0 0 / 100% 100% 0 0",
+            transform: "scaleX(1.6)",
+          }}
         />
       </section>
 
@@ -379,7 +416,10 @@ export default function VendasPage() {
       {!isLoading && categoriasDisponiveis.length > 1 && !busca && (
         <nav className="sticky top-16 z-20 bg-white border-b border-gray-100 shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <div className="flex gap-2 py-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <div
+              className="flex gap-2 py-3 overflow-x-auto"
+              style={{ scrollbarWidth: "none" }}
+            >
               {categoriasDisponiveis.map((cat) => {
                 const isAtiva = categoriaAtiva === cat;
                 return (
@@ -394,7 +434,11 @@ export default function VendasPage() {
                             borderColor: paleta.primaria,
                             color: paleta.textoBranco ? "white" : "#111",
                           }
-                        : { backgroundColor: "transparent", borderColor: "#e5e7eb", color: "#6b7280" }
+                        : {
+                            backgroundColor: "transparent",
+                            borderColor: "#e5e7eb",
+                            color: "#6b7280",
+                          }
                     }
                   >
                     {CATEGORIAS_LABEL[cat] ?? cat}
@@ -415,7 +459,9 @@ export default function VendasPage() {
           <div className="flex flex-col items-center justify-center py-32 gap-4">
             <div
               className="w-10 h-10 border-[3px] border-t-transparent rounded-full animate-spin"
-              style={{ borderColor: `${paleta.primaria} transparent transparent transparent` }}
+              style={{
+                borderColor: `${paleta.primaria} transparent transparent transparent`,
+              }}
             />
             <p className="text-gray-500 text-sm">Carregando produtos...</p>
           </div>
@@ -428,9 +474,14 @@ export default function VendasPage() {
               className="w-20 h-20 rounded-full flex items-center justify-center"
               style={{ backgroundColor: paleta.clara }}
             >
-              <Search className="w-10 h-10" style={{ color: paleta.primaria }} />
+              <Search
+                className="w-10 h-10"
+                style={{ color: paleta.primaria }}
+              />
             </div>
-            <p className="text-gray-700 font-semibold text-xl">Nenhum produto encontrado</p>
+            <p className="text-gray-700 font-semibold text-xl">
+              Nenhum produto encontrado
+            </p>
             <p className="text-gray-400 text-sm">
               NÃ£o achamos nada para &ldquo;{busca}&rdquo;
             </p>
@@ -447,21 +498,25 @@ export default function VendasPage() {
         {/* Fileiras de categorias */}
         {!isLoading && !semResultados && (
           <div className="divide-y divide-gray-100">
-            {Array.from(produtosPorCategoria.entries()).map(([categoria, produtosDaCategoria]) => (
-              <div
-                key={categoria}
-                ref={(el) => { categoriaRefs.current[categoria] = el; }}
-              >
-                <CategoryRow
-                  categoria={categoria}
-                  produtos={produtosDaCategoria}
-                  whatsappNumber={whatsappNumber}
-                  onAdicionarCarrinho={adicionarItem}
-                  corPrimaria={paleta.primaria}
-                  corClara={paleta.clara}
-                />
-              </div>
-            ))}
+            {Array.from(produtosPorCategoria.entries()).map(
+              ([categoria, produtosDaCategoria]) => (
+                <div
+                  key={categoria}
+                  ref={(el) => {
+                    categoriaRefs.current[categoria] = el;
+                  }}
+                >
+                  <CategoryRow
+                    categoria={categoria}
+                    produtos={produtosDaCategoria}
+                    whatsappNumber={whatsappNumber}
+                    onAdicionarCarrinho={adicionarItem}
+                    corPrimaria={paleta.primaria}
+                    corClara={paleta.clara}
+                  />
+                </div>
+              ),
+            )}
           </div>
         )}
 
@@ -472,10 +527,17 @@ export default function VendasPage() {
               className="w-24 h-24 rounded-full flex items-center justify-center"
               style={{ backgroundColor: paleta.clara }}
             >
-              <ShoppingCart className="w-12 h-12" style={{ color: paleta.primaria }} />
+              <ShoppingCart
+                className="w-12 h-12"
+                style={{ color: paleta.primaria }}
+              />
             </div>
-            <p className="text-gray-700 font-semibold text-xl">Nenhum produto disponÃ­vel ainda</p>
-            <p className="text-gray-400 text-sm">Em breve novidades por aqui!</p>
+            <p className="text-gray-700 font-semibold text-xl">
+              Nenhum produto disponÃ­vel ainda
+            </p>
+            <p className="text-gray-400 text-sm">
+              Em breve novidades por aqui!
+            </p>
           </div>
         )}
       </main>
@@ -497,7 +559,9 @@ export default function VendasPage() {
               />
             </div>
           )}
-          <p className="font-bold text-gray-800 text-lg">{nomeLoja || params.slug}</p>
+          <p className="font-bold text-gray-800 text-lg">
+            {nomeLoja || params.slug}
+          </p>
           <p className="text-sm text-gray-400 max-w-xs">
             Compras seguras e cÃ³modas via WhatsApp.
             <br />
@@ -515,7 +579,8 @@ export default function VendasPage() {
             </a>
           )}
           <p className="text-xs text-gray-300 mt-2">
-            Â© {new Date().getFullYear()} {nomeLoja} â€” Todos os direitos reservados
+            Â© {new Date().getFullYear()} {nomeLoja} â€” Todos os direitos
+            reservados
           </p>
         </div>
       </footer>

@@ -13,12 +13,10 @@
 import { z } from "zod";
 
 // =============================================================================
-// SCHEMA: Categorias disponíveis de produto
+// SCHEMA: Categorias padrão (fallback quando o tenant não definiu as suas)
 // =============================================================================
-// Edite esta lista para adicionar/remover categorias no sistema.
-// Lançamentos é a categoria especial que sempre aparece primeiro no catálogo.
-export const CATEGORIAS_VENDA = [
-  "lancamentos", // Primeira fileira — destaque especial
+export const CATEGORIAS_VENDA_PADRAO = [
+  "lancamentos",
   "mais-vendidos",
   "promocoes",
   "eletronicos",
@@ -27,7 +25,8 @@ export const CATEGORIAS_VENDA = [
   "servicos",
 ] as const;
 
-export type CategoriaVenda = (typeof CATEGORIAS_VENDA)[number];
+// Categoria é string livre — o tenant define as suas no painel de Configurações.
+export type CategoriaVenda = string;
 
 // =============================================================================
 // SCHEMA: Criação de Produto de Venda
@@ -54,11 +53,13 @@ export const CriarProdutoVendaSchema = z.object({
     .optional()
     .nullable(),
 
-  // Categoria define em qual fileira o produto aparece no catálogo
-  categoria: z.enum(CATEGORIAS_VENDA, {
-    required_error: "Categoria é obrigatória",
-    invalid_type_error: "Categoria inválida",
-  }),
+  // Categoria define em qual fileira o produto aparece no catálogo.
+  // Aceita qualquer string — o tenant define as suas no painel.
+  categoria: z
+    .string({ required_error: "Categoria é obrigatória" })
+    .min(1, "Categoria não pode ser vazia")
+    .max(60, "Categoria deve ter no máximo 60 caracteres")
+    .trim(),
 
   // URL da imagem — preenchida após o upload
   foto_url: z.string().url("URL de foto inválida").optional().nullable(),
@@ -88,7 +89,7 @@ export const ProdutoVendaParamsSchema = z.object({
 // SCHEMA: Query string para listagem do catálogo (rota pública)
 // =============================================================================
 export const ListarProdutosVendaQuerySchema = z.object({
-  categoria: z.enum(CATEGORIAS_VENDA).optional(),
+  categoria: z.string().max(50).optional(),
 
   busca: z.string().max(100).optional(),
 
@@ -201,6 +202,16 @@ export const AtualizarVendasConfigSchema = z.object({
     .trim()
     .optional()
     .nullable(),
+
+  // Categorias personalizadas definidas pelo tenant no painel admin.
+  // Armazenadas como JSON no banco. Ex: ["Roupas", "Calçados", "Acessórios"]
+  categorias: z
+    .array(z.string().min(1).max(50).trim())
+    .max(20, "Máximo de 20 categorias")
+    .optional()
+    .nullable(),
 });
 
-export type AtualizarVendasConfigInput = z.infer<typeof AtualizarVendasConfigSchema>;
+export type AtualizarVendasConfigInput = z.infer<
+  typeof AtualizarVendasConfigSchema
+>;

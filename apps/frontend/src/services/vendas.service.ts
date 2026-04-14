@@ -213,12 +213,14 @@ export async function getVendasConfig(slug?: string): Promise<{
   nome_loja: string | null;
   logo_url: string | null;
   tenant_name: string | null;
+  categorias: string[] | null;
 }> {
   const response = await api.get<{
     whatsapp_number: string | null;
     nome_loja: string | null;
     logo_url: string | null;
     tenant_name: string | null;
+    categorias: string[] | null;
   }>("/vendas/config", { params: slug ? { slug } : undefined });
   return response.data;
 }
@@ -229,6 +231,7 @@ export async function getVendasConfig(slug?: string): Promise<{
 export async function updateVendasConfig(data: {
   whatsapp_number?: string;
   nome_loja?: string;
+  categorias?: string[];
 }): Promise<{ mensagem: string }> {
   const response = await api.put<{ mensagem: string }>("/vendas/config", data);
   return response.data;

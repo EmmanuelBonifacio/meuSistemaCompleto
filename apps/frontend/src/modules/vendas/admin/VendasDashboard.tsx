@@ -11,7 +11,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ShoppingBag,
   DollarSign,
@@ -28,6 +28,7 @@ import {
   X,
   ImageIcon,
   AlertTriangle,
+  Tag,
 } from "lucide-react";
 import Image from "next/image";
 import type {
@@ -43,7 +44,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 // ex: "/uploads/vendas/xxx.jpg" → "http://localhost:3000/uploads/vendas/xxx.jpg"
 function resolveImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:")
+  )
+    return url;
   return `${API_BASE}${url}`;
 }
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
@@ -110,6 +116,9 @@ export function VendasDashboard() {
   >(null);
   const [config, setConfig] = useState({ whatsapp_number: "", nome_loja: "" });
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [novaCategoria, setNovaCategoria] = useState("");
+  const inputCategoriaRef = useRef<HTMLInputElement>(null);
   const [uploadandoLogo, setUploadandoLogo] = useState(false);
   const [removendoLogo, setRemovendoLogo] = useState(false);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
@@ -146,6 +155,7 @@ export function VendasDashboard() {
         nome_loja: configRes.nome_loja ?? "",
       });
       setLogoUrl(configRes.logo_url ?? null);
+      setCategorias(configRes.categorias ?? []);
     } catch (err) {
       console.error("[VendasDashboard] Erro ao carregar dados:", err);
     } finally {
@@ -232,6 +242,14 @@ export function VendasDashboard() {
   const handleAbrirAdicionarProduto = () => {
     setProdutoEditando(null);
     setModalAberto(true);
+  };
+
+  const addCategoria = () => {
+    const nova = novaCategoria.trim();
+    if (!nova || categorias.includes(nova)) return;
+    setCategorias((prev) => [...prev, nova]);
+    setNovaCategoria("");
+    inputCategoriaRef.current?.focus();
   };
 
   if (isLoading) {
@@ -489,6 +507,74 @@ export function VendasDashboard() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
                 />
               </div>
+              {/* --- Categorias Personalizadas --- */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Categorias do Catálogo
+                </label>
+                <p className="text-xs text-gray-500">
+                  Define as seções que aparecem na vitrine. Ex:
+                  &quot;Roupas&quot;, &quot;Calçados&quot;,
+                  &quot;Promoções&quot;. Deixe vazio para usar as categorias
+                  padrão.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    ref={inputCategoriaRef}
+                    type="text"
+                    value={novaCategoria}
+                    onChange={(e) => setNovaCategoria(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCategoria();
+                      }
+                    }}
+                    placeholder="Nome da categoria..."
+                    maxLength={60}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={addCategoria}
+                    disabled={!novaCategoria.trim()}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Adicionar</span>
+                  </button>
+                </div>
+                {categorias.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {categorias.map((cat) => (
+                      <span
+                        key={cat}
+                        className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
+                      >
+                        <Tag className="w-3 h-3 flex-shrink-0" />
+                        {cat}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCategorias((prev) =>
+                              prev.filter((c) => c !== cat),
+                            )
+                          }
+                          className="hover:text-red-600 transition-colors ml-0.5"
+                          aria-label={`Remover categoria ${cat}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">
+                    Nenhuma categoria definida — usando categorias padrão do
+                    sistema.
+                  </p>
+                )}
+              </div>
               <button
                 onClick={async () => {
                   setSalvandoConfig(true);
@@ -496,6 +582,7 @@ export function VendasDashboard() {
                     await updateVendasConfig({
                       whatsapp_number: config.whatsapp_number || undefined,
                       nome_loja: config.nome_loja || undefined,
+                      categorias,
                     });
                     mostrarSucesso("Configurações salvas com sucesso!");
                   } catch (err) {
@@ -531,88 +618,200 @@ export function VendasDashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-gray-100">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="text-left px-4 py-3 font-medium text-gray-600">
-                          Produto
-                        </th>
-                        <th className="text-left px-4 py-3 font-medium text-gray-600">
-                          Categoria
-                        </th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-600">
-                          Preço
-                        </th>
-                        <th className="text-center px-4 py-3 font-medium text-gray-600">
-                          Status
-                        </th>
-                        <th className="text-center px-4 py-3 font-medium text-gray-600">
-                          Ações
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {produtos.map((produto) => (
-                        <tr
-                          key={produto.id}
-                          className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                        >
-                          {/* Foto + Nome */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                                {produto.foto_url ? (
-                                  <Image
-                                    src={resolveImageUrl(produto.foto_url)!}
-                                    alt={produto.nome}
-                                    fill
-                                    className="object-cover"
-                                    sizes="40px"
-                                    unoptimized
-                                  />
-                                ) : (
-                                  <Package className="w-5 h-5 text-gray-300 m-auto mt-2.5" />
-                                )}
+                <>
+                  {/* Tabela — visível apenas em sm+ */}
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-gray-100">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="text-left px-4 py-3 font-medium text-gray-600">
+                            Produto
+                          </th>
+                          <th className="text-left px-4 py-3 font-medium text-gray-600">
+                            Categoria
+                          </th>
+                          <th className="text-right px-4 py-3 font-medium text-gray-600">
+                            Preço
+                          </th>
+                          <th className="text-center px-4 py-3 font-medium text-gray-600">
+                            Status
+                          </th>
+                          <th className="text-center px-4 py-3 font-medium text-gray-600">
+                            Ações
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {produtos.map((produto) => (
+                          <tr
+                            key={produto.id}
+                            className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                          >
+                            {/* Foto + Nome */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                                  {produto.foto_url ? (
+                                    <Image
+                                      src={resolveImageUrl(produto.foto_url)!}
+                                      alt={produto.nome}
+                                      fill
+                                      className="object-cover"
+                                      sizes="40px"
+                                      unoptimized
+                                    />
+                                  ) : (
+                                    <Package className="w-5 h-5 text-gray-300 m-auto mt-2.5" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">
+                                    {produto.nome}
+                                  </p>
+                                  {produto.destaque && (
+                                    <span className="text-xs text-indigo-600 font-medium">
+                                      ★ Destaque
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-900">
-                                  {produto.nome}
-                                </p>
-                                {produto.destaque && (
-                                  <span className="text-xs text-indigo-600 font-medium">
-                                    ★ Destaque
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          {/* Categoria */}
-                          <td className="px-4 py-3 text-gray-600">
-                            {CATEGORIAS_LABEL[produto.categoria] ??
-                              produto.categoria}
-                          </td>
-                          {/* Preço */}
-                          <td className="px-4 py-3 text-right">
-                            {produto.preco_promocional ? (
-                              <div>
-                                <p className="text-xs text-gray-400 line-through">
+                            </td>
+                            {/* Categoria */}
+                            <td className="px-4 py-3 text-gray-600">
+                              {CATEGORIAS_LABEL[produto.categoria] ??
+                                produto.categoria}
+                            </td>
+                            {/* Preço */}
+                            <td className="px-4 py-3 text-right">
+                              {produto.preco_promocional ? (
+                                <div>
+                                  <p className="text-xs text-gray-400 line-through">
+                                    {formatarMoeda(produto.preco)}
+                                  </p>
+                                  <p className="font-semibold text-red-600">
+                                    {formatarMoeda(produto.preco_promocional)}
+                                  </p>
+                                </div>
+                              ) : (
+                                <p className="font-semibold text-gray-900">
                                   {formatarMoeda(produto.preco)}
                                 </p>
-                                <p className="font-semibold text-red-600">
-                                  {formatarMoeda(produto.preco_promocional)}
-                                </p>
+                              )}
+                            </td>
+                            {/* Status ativo/inativo */}
+                            <td className="px-4 py-3 text-center">
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  produto.ativo
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-gray-100 text-gray-600"
+                                }`}
+                              >
+                                {produto.ativo ? "Ativo" : "Inativo"}
+                              </span>
+                            </td>
+                            {/* Ações */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleEditarProduto(produto)}
+                                  className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                  aria-label="Editar produto"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                {confirmandoDeletarId === produto.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleDeletar(produto)}
+                                      disabled={deletandoId === produto.id}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                      {deletandoId === produto.id ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : null}
+                                      Confirmar
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        setConfirmandoDeletarId(null)
+                                      }
+                                      className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleDeletar(produto)}
+                                    disabled={deletandoId === produto.id}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                    aria-label="Deletar produto"
+                                    title="Deletar produto"
+                                  >
+                                    {deletandoId === produto.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                )}
                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Cards — visível apenas em mobile (< sm) */}
+                  <div className="sm:hidden space-y-3">
+                    {produtos.map((produto) => (
+                      <div
+                        key={produto.id}
+                        className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 bg-white"
+                      >
+                        {/* Foto */}
+                        <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                          {produto.foto_url ? (
+                            <Image
+                              src={resolveImageUrl(produto.foto_url)!}
+                              alt={produto.nome}
+                              fill
+                              className="object-cover"
+                              sizes="56px"
+                              unoptimized
+                            />
+                          ) : (
+                            <Package className="w-6 h-6 text-gray-300 m-auto mt-4" />
+                          )}
+                        </div>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 text-sm truncate">
+                            {produto.nome}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {CATEGORIAS_LABEL[produto.categoria] ??
+                              produto.categoria}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {produto.preco_promocional ? (
+                              <>
+                                <span className="text-xs text-gray-400 line-through">
+                                  {formatarMoeda(produto.preco)}
+                                </span>
+                                <span className="text-sm font-semibold text-red-600">
+                                  {formatarMoeda(produto.preco_promocional)}
+                                </span>
+                              </>
                             ) : (
-                              <p className="font-semibold text-gray-900">
+                              <span className="text-sm font-semibold text-gray-900">
                                 {formatarMoeda(produto.preco)}
-                              </p>
+                              </span>
                             )}
-                          </td>
-                          {/* Status ativo/inativo */}
-                          <td className="px-4 py-3 text-center">
                             <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                                 produto.ativo
                                   ? "bg-green-100 text-green-800"
                                   : "bg-gray-100 text-gray-600"
@@ -620,60 +819,55 @@ export function VendasDashboard() {
                             >
                               {produto.ativo ? "Ativo" : "Inativo"}
                             </span>
-                          </td>
-                          {/* Ações */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
+                          </div>
+                        </div>
+                        {/* Ações */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => handleEditarProduto(produto)}
+                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            aria-label="Editar produto"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          {confirmandoDeletarId === produto.id ? (
+                            <div className="flex items-center gap-1">
                               <button
-                                onClick={() => handleEditarProduto(produto)}
-                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                aria-label="Editar produto"
+                                onClick={() => handleDeletar(produto)}
+                                disabled={deletandoId === produto.id}
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
                               >
-                                <Pencil className="w-4 h-4" />
+                                {deletandoId === produto.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : null}
+                                OK
                               </button>
-                              {confirmandoDeletarId === produto.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDeletar(produto)}
-                                    disabled={deletandoId === produto.id}
-                                    className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                                  >
-                                    {deletandoId === produto.id ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : null}
-                                    Confirmar
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      setConfirmandoDeletarId(null)
-                                    }
-                                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleDeletar(produto)}
-                                  disabled={deletandoId === produto.id}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                                  aria-label="Deletar produto"
-                                  title="Deletar produto"
-                                >
-                                  {deletandoId === produto.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="w-4 h-4" />
-                                  )}
-                                </button>
-                              )}
+                              <button
+                                onClick={() => setConfirmandoDeletarId(null)}
+                                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          ) : (
+                            <button
+                              onClick={() => handleDeletar(produto)}
+                              disabled={deletandoId === produto.id}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              aria-label="Deletar produto"
+                            >
+                              {deletandoId === produto.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -686,6 +880,7 @@ export function VendasDashboard() {
         onClose={() => setModalAberto(false)}
         produto={produtoEditando}
         onSalvo={handleProdutoSalvo}
+        categorias={categorias.length > 0 ? categorias : undefined}
       />
     </div>
   );

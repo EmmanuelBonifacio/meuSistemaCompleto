@@ -11,7 +11,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown, MessageSquare, Loader2 } from "lucide-react";
 import type { PedidoVenda, StatusPedido } from "@/types/vendas.types";
 import { STATUS_PEDIDO_LABEL, STATUS_PEDIDO_COR } from "@/types/vendas.types";
@@ -137,12 +137,9 @@ export function OrdersTable({ pedidos, onPedidoAtualizado }: OrdersTableProps) {
         </thead>
         <tbody>
           {pedidos.map((pedido) => (
-            <>
+            <Fragment key={pedido.id}>
               {/* Linha principal do pedido */}
-              <tr
-                key={pedido.id}
-                className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-              >
+              <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                   {formatarData(pedido.created_at)}
                 </td>
@@ -268,7 +265,7 @@ export function OrdersTable({ pedidos, onPedidoAtualizado }: OrdersTableProps) {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

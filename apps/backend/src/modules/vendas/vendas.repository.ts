@@ -47,6 +47,61 @@ export interface ProdutoVendaListResult {
 }
 
 // =============================================================================
+// HELPER: garante que as tabelas do módulo de vendas existem no schema do tenant.
+// Idempotente: CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS.
+// Necessário para tenants provisionados antes das tabelas serem adicionadas.
+// =============================================================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureVendasTables(schemaName: string): Promise<void> {
+  await withTenantSchema(schemaName, async (tx) => {
+    // Tabela de produtos
+    await tx.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}".venda_produtos (
+        id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+        nome              VARCHAR(255)  NOT NULL,
+        descricao         TEXT,
+        preco             DECIMAL(10,2) NOT NULL DEFAULT 0.00
+                          CONSTRAINT venda_produtos_preco_positivo CHECK (preco >= 0),
+        preco_promocional DECIMAL(10,2)
+                          CONSTRAINT venda_produtos_preco_promo_positivo CHECK (preco_promocional >= 0),
+        categoria         VARCHAR(50)   NOT NULL DEFAULT 'lancamentos',
+        foto_url          TEXT,
+        ativo             BOOLEAN       NOT NULL DEFAULT true,
+        destaque          BOOLEAN       NOT NULL DEFAULT false,
+        ordem             INTEGER       NOT NULL DEFAULT 0,
+        created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS idx_venda_produtos_catalogo
+        ON "${schemaName}".venda_produtos (categoria, ativo, ordem ASC)
+    `);
+    await tx.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS idx_venda_produtos_destaque
+        ON "${schemaName}".venda_produtos (destaque)
+        WHERE destaque = true
+    `);
+    // Tabela de pedidos
+    await tx.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}".venda_pedidos (
+        id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+        numero_whatsapp VARCHAR(20),
+        itens_json      JSONB         NOT NULL DEFAULT '[]'::jsonb,
+        total           DECIMAL(10,2) NOT NULL DEFAULT 0.00
+                        CONSTRAINT venda_pedidos_total_positivo CHECK (total >= 0),
+        status          VARCHAR(20)   NOT NULL DEFAULT 'pendente'
+                        CONSTRAINT venda_pedidos_status_check
+                        CHECK (status IN ('pendente', 'pago', 'enviado', 'finalizado', 'cancelado')),
+        notas           TEXT,
+        created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      )
+    `);
+  });
+}
+
+// =============================================================================
 // FUNÇÃO: findAllProdutosVenda
 // =============================================================================
 // Retorna o catálogo de produtos com filtros opcionais.
@@ -58,6 +113,7 @@ export async function findAllProdutosVenda(
   query: ListarProdutosVendaQuery,
   onlyActive = true,
 ): Promise<ProdutoVendaListResult> {
+  await ensureVendasTables(schemaName);
   const { page, limit, busca, categoria } = query;
   const offset = (page - 1) * limit;
 
@@ -142,6 +198,7 @@ export async function createProdutoVenda(
   schemaName: string,
   data: CriarProdutoVendaInput,
 ): Promise<ProdutoVenda> {
+  await ensureVendasTables(schemaName);
   return withTenantSchema(schemaName, async (tx) => {
     const results = await tx.$queryRaw<ProdutoVenda[]>`
       INSERT INTO venda_produtos

@@ -248,6 +248,7 @@ async function ensureVendaConfig(schemaName: string, tx: any): Promise<void> {
       whatsapp_number VARCHAR(20),
       nome_loja       VARCHAR(255),
       logo_url        VARCHAR(500),
+      categorias      TEXT,
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT venda_config_single_row CHECK (id = 1)
     )
@@ -256,6 +257,11 @@ async function ensureVendaConfig(schemaName: string, tx: any): Promise<void> {
     INSERT INTO "${schemaName}".venda_config (id)
     VALUES (1)
     ON CONFLICT DO NOTHING
+  `);
+  // Migração não destrutiva: adiciona coluna categorias se ainda não existir
+  await tx.$executeRawUnsafe(`
+    ALTER TABLE "${schemaName}".venda_config
+    ADD COLUMN IF NOT EXISTS categorias TEXT
   `);
 }
 
@@ -277,18 +283,36 @@ export async function getVendasConfig(
         whatsapp_number: string | null;
         nome_loja: string | null;
         logo_url: string | null;
+        categorias: string | null;
       }[]
     >(
-      `SELECT whatsapp_number, nome_loja, logo_url
+      `SELECT whatsapp_number, nome_loja, logo_url, categorias
          FROM "${schemaName}".venda_config
         WHERE id = 1`,
     );
     return (
-      rows[0] ?? { whatsapp_number: null, nome_loja: null, logo_url: null }
+      rows[0] ?? {
+        whatsapp_number: null,
+        nome_loja: null,
+        logo_url: null,
+        categorias: null,
+      }
     );
   });
 
-  return reply.status(200).send({ ...config, tenant_name: tenantName });
+  // Desserializa o JSON de categorias antes de enviar ao frontend
+  let categoriasArray: string[] | null = null;
+  if (config.categorias) {
+    try {
+      categoriasArray = JSON.parse(config.categorias);
+    } catch {
+      /* ignora */
+    }
+  }
+
+  return reply
+    .status(200)
+    .send({ ...config, categorias: categoriasArray, tenant_name: tenantName });
 }
 
 // =============================================================================
@@ -300,9 +324,8 @@ export async function updateVendasConfig(
   reply: FastifyReply,
 ) {
   const schemaName = request.tenant!.schemaName;
-  const { whatsapp_number, nome_loja } = AtualizarVendasConfigSchema.parse(
-    request.body,
-  );
+  const { whatsapp_number, nome_loja, categorias } =
+    AtualizarVendasConfigSchema.parse(request.body);
 
   await withTenantSchema(schemaName, async (tx) => {
     await ensureVendaConfig(schemaName, tx);
@@ -310,10 +333,12 @@ export async function updateVendasConfig(
       `UPDATE "${schemaName}".venda_config
          SET whatsapp_number = $1,
              nome_loja       = $2,
+             categorias      = $3,
              updated_at      = NOW()
        WHERE id = 1`,
       whatsapp_number ?? null,
       nome_loja ?? null,
+      categorias != null ? JSON.stringify(categorias) : null,
     );
   });
 
