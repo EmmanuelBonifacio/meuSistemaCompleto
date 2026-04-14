@@ -52,9 +52,9 @@ export interface Product {
   price: number;
   quantity: number;
   sku: string | null;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // =============================================================================
@@ -100,8 +100,10 @@ export async function findAllProducts(
     // Busca os produtos com paginação
     values.push(limit, offset);
     const products = await tx.$queryRawUnsafe<Product[]>(
-      `SELECT id, name, description, price::float, quantity, sku, is_active,
-              created_at, updated_at
+      `SELECT id, name, description, price::float, quantity, sku,
+              is_active AS "isActive",
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
        FROM products
        ${whereClause}
        ORDER BY name ASC
@@ -140,8 +142,10 @@ export async function findProductById(
     // O PostgreSQL garante que este valor é tratado como DADO, não como SQL.
     // Isso previne: id = "'; DROP TABLE products; --"
     const results = await tx.$queryRaw<Product[]>`
-      SELECT id, name, description, price::float, quantity, sku, is_active,
-             created_at, updated_at
+      SELECT id, name, description, price::float, quantity, sku,
+             is_active AS "isActive",
+             created_at AS "createdAt",
+             updated_at AS "updatedAt"
       FROM products
       WHERE id = ${id}::uuid
       LIMIT 1
@@ -168,7 +172,9 @@ export async function createProduct(
         ${data.sku ?? null}
       )
       RETURNING id, name, description, price::float, quantity, sku,
-                is_active, created_at, updated_at
+                is_active AS "isActive",
+                created_at AS "createdAt",
+                updated_at AS "updatedAt"
     `;
     // RETURNING é uma cláusula do PostgreSQL que retorna o registro
     // recém-inserido. Evita um segundo SELECT após o INSERT.
@@ -227,7 +233,9 @@ export async function updateProduct(
        SET ${setClauses.join(", ")}
        WHERE id = $${idPosition}::uuid
        RETURNING id, name, description, price::float, quantity, sku,
-                 is_active, created_at, updated_at`,
+                 is_active AS "isActive",
+                 created_at AS "createdAt",
+                 updated_at AS "updatedAt"`,
       ...values,
     );
 

@@ -91,7 +91,7 @@ export async function updatePedidoVenda(
   const schemaName = request.tenant!.schemaName;
   const { id } = PedidoParamsSchema.parse(request.params);
   const { status, notas } = AtualizarPedidoSchema.parse({
-    ...request.body,
+    ...(request.body as Record<string, unknown>),
     id,
   });
 

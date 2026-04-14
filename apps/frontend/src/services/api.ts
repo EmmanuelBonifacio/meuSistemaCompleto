@@ -54,6 +54,10 @@ const apiInstance: AxiosInstance = axios.create({
   // Evita que a aplicação "trave" esperando infinitamente.
   timeout: 15_000,
 
+  // Necessário para que cookies e o header Authorization sejam enviados
+  // em requisições cross-origin (exigido pelo credentials: true no backend).
+  withCredentials: true,
+
   headers: {
     "Content-Type": "application/json",
     // O Accept diz ao servidor que esperamos JSON de volta:
@@ -118,12 +122,19 @@ apiInstance.interceptors.response.use(
     if (status === 401) {
       // Token expirado ou inválido — limpar sessão e redirecionar para login
       if (typeof window !== "undefined") {
-        const slug = localStorage.getItem(TENANT_SLUG_KEY);
-        localStorage.removeItem(TOKEN_KEY);
+        const isAdminRoute = error.config?.url?.startsWith("/admin");
 
-        // Redireciona para a página de login do tenant atual
-        const loginPath = slug ? `/${slug}/login` : "/";
-        window.location.href = loginPath;
+        if (isAdminRoute) {
+          // Rota admin: limpa token admin e redireciona para /admin/login
+          localStorage.removeItem(ADMIN_TOKEN_KEY);
+          window.location.href = "/admin/login";
+        } else {
+          // Rota de tenant: limpa token e redireciona para o login do tenant
+          const slug = localStorage.getItem(TENANT_SLUG_KEY);
+          localStorage.removeItem(TOKEN_KEY);
+          const loginPath = slug ? `/${slug}/login` : "/";
+          window.location.href = loginPath;
+        }
       }
     }
 

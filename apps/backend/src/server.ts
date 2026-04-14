@@ -149,6 +149,14 @@ async function buildServer() {
         ? (process.env.FRONTEND_URL ?? false)
         : true, // Em dev aceita qualquer origem
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "Accept",
+      "X-Requested-With",
+    ],
+    exposedHeaders: ["Content-Disposition"],
   });
 
   // Registra hook que grava logs de acesso por tenant/módulo na tabela request_logs

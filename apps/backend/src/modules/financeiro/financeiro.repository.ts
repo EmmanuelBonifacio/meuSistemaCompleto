@@ -33,10 +33,9 @@ export interface Transaction {
   amount: number;
   description: string;
   category: string | null;
-  transaction_date: Date;
-  is_reconciled: boolean;
-  created_at: Date;
-  updated_at: Date;
+  transactionDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // =============================================================================
@@ -54,7 +53,7 @@ export interface FinancialSummary {
 // =============================================================================
 export interface TransactionListResult {
   data: Transaction[];
-  summary: FinancialSummary;
+  resumo: FinancialSummary;
   total: number;
   page: number;
   limit: number;
@@ -100,7 +99,9 @@ export async function findAllTransactions(
     const listValues = [...values, limit, offset];
     const transactions = await tx.$queryRawUnsafe<Transaction[]>(
       `SELECT id, type, amount::float, description, category,
-              transaction_date, is_reconciled, created_at, updated_at
+              transaction_date AS "transactionDate",
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
        FROM transactions
        ${whereClause}
        ORDER BY transaction_date DESC, created_at DESC
@@ -134,7 +135,7 @@ export async function findAllTransactions(
 
     return {
       data: transactions,
-      summary: {
+      resumo: {
         totalReceitas,
         totalDespesas,
         saldo: totalReceitas - totalDespesas,
@@ -161,7 +162,9 @@ export async function findTransactionById(
   return withTenantSchema(schemaName, async (tx) => {
     const results = await tx.$queryRaw<Transaction[]>`
       SELECT id, type, amount::float, description, category,
-             transaction_date, is_reconciled, created_at, updated_at
+             transaction_date AS "transactionDate",
+             created_at AS "createdAt",
+             updated_at AS "updatedAt"
       FROM transactions
       WHERE id = ${id}::uuid
       LIMIT 1
@@ -188,7 +191,9 @@ export async function createTransaction(
         ${data.transactionDate ?? new Date()}
       )
       RETURNING id, type, amount::float, description, category,
-                transaction_date, is_reconciled, created_at, updated_at
+                transaction_date AS "transactionDate",
+                created_at AS "createdAt",
+                updated_at AS "updatedAt"
     `;
     return results[0];
   });
@@ -239,7 +244,9 @@ export async function updateTransaction(
        SET ${setClauses.join(", ")}
        WHERE id = $${values.length}::uuid
        RETURNING id, type, amount::float, description, category,
-                 transaction_date, is_reconciled, created_at, updated_at`,
+                 transaction_date AS "transactionDate",
+                 created_at AS "createdAt",
+                 updated_at AS "updatedAt"`,
       ...values,
     );
 
