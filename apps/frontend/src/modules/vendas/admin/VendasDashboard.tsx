@@ -246,7 +246,8 @@ export function VendasDashboard() {
 
   const addCategoria = () => {
     const nova = novaCategoria.trim();
-    if (!nova || categorias.includes(nova)) return;
+    // "lancamentos" é sempre fixo — não permitir adicionar de novo
+    if (!nova || nova.toLowerCase() === "lancamentos" || categorias.includes(nova)) return;
     setCategorias((prev) => [...prev, nova]);
     setNovaCategoria("");
     inputCategoriaRef.current?.focus();
@@ -513,10 +514,8 @@ export function VendasDashboard() {
                   Categorias do Catálogo
                 </label>
                 <p className="text-xs text-gray-500">
-                  Define as seções que aparecem na vitrine. Ex:
-                  &quot;Roupas&quot;, &quot;Calçados&quot;,
-                  &quot;Promoções&quot;. Deixe vazio para usar as categorias
-                  padrão.
+                  &quot;Lançamentos&quot; é fixa e sempre aparece primeiro.
+                  Adicione outras seções que deseja exibir na vitrine.
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -544,36 +543,40 @@ export function VendasDashboard() {
                     <span className="hidden sm:inline">Adicionar</span>
                   </button>
                 </div>
-                {categorias.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {categorias.map((cat) => (
-                      <span
-                        key={cat}
-                        className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
+                <div className="flex flex-wrap gap-2">
+                  {/* Pill fixo de Lançamentos — não pode ser removido */}
+                  <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 text-amber-700 text-sm font-semibold px-3 py-1.5 rounded-full">
+                    <Tag className="w-3 h-3 flex-shrink-0" />
+                    Lançamentos
+                    <span className="ml-1 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">fixo</span>
+                  </span>
+                  {categorias.map((cat) => (
+                    <span
+                      key={cat}
+                      className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
+                    >
+                      <Tag className="w-3 h-3 flex-shrink-0" />
+                      {cat}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCategorias((prev) =>
+                            prev.filter((c) => c !== cat),
+                          )
+                        }
+                        className="hover:text-red-600 transition-colors ml-0.5"
+                        aria-label={`Remover categoria ${cat}`}
                       >
-                        <Tag className="w-3 h-3 flex-shrink-0" />
-                        {cat}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCategorias((prev) =>
-                              prev.filter((c) => c !== cat),
-                            )
-                          }
-                          className="hover:text-red-600 transition-colors ml-0.5"
-                          aria-label={`Remover categoria ${cat}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">
-                    Nenhuma categoria definida — usando categorias padrão do
-                    sistema.
-                  </p>
-                )}
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {categorias.length === 0 && (
+                    <p className="text-xs text-gray-400 italic self-center">
+                      Adicione outras categorias acima.
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={async () => {

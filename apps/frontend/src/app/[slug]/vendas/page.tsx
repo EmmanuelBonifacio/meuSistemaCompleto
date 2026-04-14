@@ -209,7 +209,11 @@ export default function VendasPage() {
         setNomeLoja(cfg.nome_loja || cfg.tenant_name || params.slug);
         if (cfg.logo_url) setLogoUrl(cfg.logo_url);
         if (cfg.categorias && cfg.categorias.length > 0) {
-          setOrdemCategorias(cfg.categorias);
+          // Garante que "lancamentos" é sempre o primeiro
+          const semLancamentos = cfg.categorias.filter(
+            (c) => c !== "lancamentos",
+          );
+          setOrdemCategorias(["lancamentos", ...semLancamentos]);
         }
       })
       .catch(() => setNomeLoja(params.slug));
@@ -235,12 +239,17 @@ export default function VendasPage() {
       : produtos;
 
     const mapa = new Map<string, ProdutoVenda[]>();
-    for (const cat of ordemCategorias) {
+    // "lancamentos" é sempre a primeira fileira
+    const ordemFinal = [
+      "lancamentos",
+      ...ordemCategorias.filter((c) => c !== "lancamentos"),
+    ];
+    for (const cat of ordemFinal) {
       const grupo = filtrados.filter((p) => p.categoria === cat);
       if (grupo.length > 0) mapa.set(cat, grupo);
     }
     for (const p of filtrados) {
-      if (!ordemCategorias.includes(p.categoria)) {
+      if (!ordemFinal.includes(p.categoria)) {
         const atual = mapa.get(p.categoria) ?? [];
         mapa.set(p.categoria, [...atual, p]);
       }
