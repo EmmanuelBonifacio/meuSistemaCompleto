@@ -19,6 +19,7 @@ import { useRouter, useParams, usePathname } from "next/navigation";
 import { AppLayout } from "@/components/shared/AppLayout";
 import { TOKEN_KEY, TENANT_SLUG_KEY } from "@/services/api";
 import { isJwtExpired } from "@/lib/utils";
+import { clearModulesCache } from "@/services/tenant.service";
 
 export default function TenantLayout({
   children,
@@ -47,8 +48,15 @@ export default function TenantLayout({
     // Rota de login e páginas públicas de vendas não requerem verificação de token
     if (!slug || isLoginPage || isVendasPublica) return;
 
-    // Persiste o slug atual para que os interceptors do Axios o utilizem
+    // Persiste o slug atual para que os interceptors do Axios o utilizem.
+    // Se o slug mudou (usuário navegou para outro tenant), limpa o token
+    // anterior para evitar que dados de um tenant vazem para outro.
     if (typeof window !== "undefined") {
+      const savedSlug = localStorage.getItem(TENANT_SLUG_KEY);
+      if (savedSlug && savedSlug !== slug) {
+        localStorage.removeItem(TOKEN_KEY);
+        clearModulesCache();
+      }
       localStorage.setItem(TENANT_SLUG_KEY, slug);
     }
 

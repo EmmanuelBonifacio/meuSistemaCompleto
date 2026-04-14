@@ -247,7 +247,12 @@ export function VendasDashboard() {
   const addCategoria = () => {
     const nova = novaCategoria.trim();
     // "lancamentos" é sempre fixo — não permitir adicionar de novo
-    if (!nova || nova.toLowerCase() === "lancamentos" || categorias.includes(nova)) return;
+    if (
+      !nova ||
+      nova.toLowerCase() === "lancamentos" ||
+      categorias.includes(nova)
+    )
+      return;
     setCategorias((prev) => [...prev, nova]);
     setNovaCategoria("");
     inputCategoriaRef.current?.focus();
@@ -548,7 +553,9 @@ export function VendasDashboard() {
                   <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 text-amber-700 text-sm font-semibold px-3 py-1.5 rounded-full">
                     <Tag className="w-3 h-3 flex-shrink-0" />
                     Lançamentos
-                    <span className="ml-1 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">fixo</span>
+                    <span className="ml-1 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">
+                      fixo
+                    </span>
                   </span>
                   {categorias.map((cat) => (
                     <span
@@ -560,9 +567,7 @@ export function VendasDashboard() {
                       <button
                         type="button"
                         onClick={() =>
-                          setCategorias((prev) =>
-                            prev.filter((c) => c !== cat),
-                          )
+                          setCategorias((prev) => prev.filter((c) => c !== cat))
                         }
                         className="hover:text-red-600 transition-colors ml-0.5"
                         aria-label={`Remover categoria ${cat}`}

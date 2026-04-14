@@ -87,35 +87,19 @@ export async function discoverActiveModules(): Promise<Module[]> {
     return cached;
   }
 
-  // 2. Testar cada módulo em paralelo (Promise.allSettled garante que
-  //    mesmo que um falhe, os outros são avaliados)
-  const results = await Promise.allSettled([
-    api.get("/estoque/produtos?limit=1"),
-    api.get("/financeiro/transacoes?limit=1"),
-    api.get("/tv/devices"),
-    api.get("/vendas/produtos/admin?limit=1"),
-  ]);
-
-  // 3. Mapear resultados: fulfilled (200) = ativo, rejected (403) = inativo
-  const activeModules = ALL_MODULES.filter((_, index) => {
-    const result = results[index];
-    // 'fulfilled' significa que a chamada retornou 2xx (módulo ativo)
-    // 'rejected' com status 403 significa que o módulo está desativado
-    // 'rejected' com status 401 significa que não está logado (outro problema)
-    if (result.status === "fulfilled") return true;
-    if (result.status === "rejected") {
-      const error = result.reason as Error;
-      // Se for "403 Forbidden", o módulo está inativo mas o usuário está logado
-      // Se for outro erro, não incluímos o módulo (comportamento seguro)
-      return false;
-    }
-    return false;
-  });
-
-  // 4. Guardar no cache para as próximas 5 páginas que o usuário visitar
-  saveModulesToCache(activeModules);
-
-  return activeModules;
+  // 2. Consulta um único endpoint dedicado (evita múltiplos 403 no console)
+  try {
+    const response = await api.get<{ modules: string[] }>("/modules/status");
+    const activeNames = response.data.modules;
+    const activeModules = ALL_MODULES.filter((m) =>
+      activeNames.includes(m.name),
+    );
+    saveModulesToCache(activeModules);
+    return activeModules;
+  } catch {
+    // Fallback: se o endpoint ainda não existir ou der erro, retorna vazio
+    return [];
+  }
 }
 
 // =============================================================================

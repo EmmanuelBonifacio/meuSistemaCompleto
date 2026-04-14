@@ -20,7 +20,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import fastifyMultipart from "@fastify/multipart";
 import path from "path";
-import { disconnectPrisma } from "./core/database/prisma";
+import { disconnectPrisma, prisma } from "./core/database/prisma";
 import { initSocketServer } from "./modules/tv/tv.socket";
 import { tenantMiddleware } from "./core/middleware/tenant.middleware";
 import { provisionNewTenant } from "./core/tenant/tenant.provisioner";
@@ -357,6 +357,26 @@ async function buildServer() {
 
   // Módulo SalesWpp — Catálogo de Vendas com Checkout via WhatsApp
   await app.register(vendasRoutes, { prefix: "/vendas" });
+
+  // ==========================================================================
+  // ROTA: GET /modules/status — lista módulos ativos para o tenant logado
+  // ==========================================================================
+  // Substitui a estratégia de "module discovery" via sondagem (que gerava
+  // vários 403 no console do browser). Um único request retorna tudo.
+  // ==========================================================================
+  app.get(
+    "/modules/status",
+    { preHandler: [tenantMiddleware] },
+    async (request, reply) => {
+      const tenantId = request.tenant!.id;
+      const tenantModules = await prisma.tenantModule.findMany({
+        where: { tenantId, isEnabled: true },
+        include: { module: { select: { name: true } } },
+      });
+      const activeModules = tenantModules.map((tm) => tm.module.name);
+      return reply.status(200).send({ modules: activeModules });
+    },
+  );
 
   // ==========================================================================
   // PAINEL ADMIN — LOGIN PÚBLICO (sem middleware)
