@@ -116,7 +116,7 @@ export function VendasDashboard() {
   >(null);
   const [config, setConfig] = useState({ whatsapp_number: "", nome_loja: "" });
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [categorias, setCategorias] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<string[]>(["lancamentos"]);
   const [novaCategoria, setNovaCategoria] = useState("");
   const inputCategoriaRef = useRef<HTMLInputElement>(null);
   const [uploadandoLogo, setUploadandoLogo] = useState(false);
@@ -155,7 +155,11 @@ export function VendasDashboard() {
         nome_loja: configRes.nome_loja ?? "",
       });
       setLogoUrl(configRes.logo_url ?? null);
-      setCategorias(configRes.categorias ?? []);
+      const saved = configRes.categorias ?? [];
+      setCategorias([
+        "lancamentos",
+        ...saved.filter((c) => c !== "lancamentos"),
+      ]);
     } catch (err) {
       console.error("[VendasDashboard] Erro ao carregar dados:", err);
     } finally {
@@ -557,26 +561,31 @@ export function VendasDashboard() {
                       fixo
                     </span>
                   </span>
-                  {categorias.map((cat) => (
-                    <span
-                      key={cat}
-                      className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
-                    >
-                      <Tag className="w-3 h-3 flex-shrink-0" />
-                      {cat}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCategorias((prev) => prev.filter((c) => c !== cat))
-                        }
-                        className="hover:text-red-600 transition-colors ml-0.5"
-                        aria-label={`Remover categoria ${cat}`}
+                  {categorias
+                    .filter((c) => c !== "lancamentos")
+                    .map((cat) => (
+                      <span
+                        key={cat}
+                        className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                  {categorias.length === 0 && (
+                        <Tag className="w-3 h-3 flex-shrink-0" />
+                        {cat}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCategorias((prev) =>
+                              prev.filter((c) => c !== cat),
+                            )
+                          }
+                          className="hover:text-red-600 transition-colors ml-0.5"
+                          aria-label={`Remover categoria ${cat}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  {categorias.filter((c) => c !== "lancamentos").length ===
+                    0 && (
                     <p className="text-xs text-gray-400 italic self-center">
                       Adicione outras categorias acima.
                     </p>
@@ -888,7 +897,7 @@ export function VendasDashboard() {
         onClose={() => setModalAberto(false)}
         produto={produtoEditando}
         onSalvo={handleProdutoSalvo}
-        categorias={categorias.length > 0 ? categorias : undefined}
+        categorias={categorias}
       />
     </div>
   );
