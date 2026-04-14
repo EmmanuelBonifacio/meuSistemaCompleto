@@ -104,9 +104,11 @@ async function buildServer() {
   //   incluindo as de erro. Registrar o Helmet primeiro garante isso.
   // ---------------------------------------------------------------------------
   await app.register(fastifyHelmet, {
-    // CSP desabilitado em dev (quebraria as DevTools do browser)
-    // Em produção, configure conforme as fontes que sua aplicação usa
     contentSecurityPolicy: process.env.NODE_ENV === "production",
+    // Permite que o frontend (porta 3001) carregue imagens servidas pelo
+    // backend (porta 3000). Sem isso o browser bloqueia com
+    // ERR_BLOCKED_BY_RESPONSE.NotSameOrigin em todas as requisições a /uploads/.
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   });
 
   // ---------------------------------------------------------------------------
