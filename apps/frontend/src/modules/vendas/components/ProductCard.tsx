@@ -24,6 +24,7 @@ interface ProductCardProps {
   produto: ProdutoVenda;
   whatsappNumber: string;
   onAdicionarCarrinho: (item: Omit<ItemCarrinho, "quantidade">) => void;
+  corPrimaria?: string;
 }
 
 // =============================================================================
@@ -44,21 +45,18 @@ export function ProductCard({
   produto,
   whatsappNumber,
   onAdicionarCarrinho,
+  corPrimaria = "#4f46e5",
 }: ProductCardProps) {
-  // Preço que será exibido em destaque (promocional tem prioridade)
   const precoAtivo = produto.preco_promocional ?? produto.preco;
   const temPromocao =
     produto.preco_promocional !== null &&
     produto.preco_promocional < produto.preco;
 
-  // Formata o preço no padrão brasileiro: R$ 1.299,90
   const formatarPreco = (valor: number) =>
     valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  // Gera o link wa.me para compra direta (1 unidade deste produto)
   const linkComprar = gerarLinkWhatsAppSingle(produto, whatsappNumber);
 
-  // Handler do botão "Adicionar ao Carrinho"
   const handleAdicionarCarrinho = () => {
     onAdicionarCarrinho({
       produto_id: produto.id,
@@ -69,50 +67,53 @@ export function ProductCard({
   };
 
   return (
-    <article className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 w-56 flex-shrink-0">
-      {/* Badge de Promoção */}
+    <article className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 w-56 flex-shrink-0">
+      {/* Badge Promoção */}
       {temPromocao && (
-        <span className="absolute top-2 left-2 z-10 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-          PROMO
+        <span className="absolute top-2.5 left-2.5 z-10 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md">
+          🔥 PROMO
         </span>
       )}
 
-      {/* Badge de Destaque / Lançamento */}
+      {/* Badge Lançamento / Destaque */}
       {produto.destaque && !temPromocao && (
-        <span className="absolute top-2 left-2 z-10 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-          NOVO
+        <span
+          className="absolute top-2.5 left-2.5 z-10 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md"
+          style={{ backgroundColor: corPrimaria }}
+        >
+          ✨ NOVO
         </span>
       )}
 
       {/* Foto do Produto */}
-      <div className="relative w-full h-44 bg-gray-50 overflow-hidden">
+      <div className="relative w-full h-48 bg-gray-50 overflow-hidden">
         {produto.foto_url ? (
           <Image
             src={resolveImageUrl(produto.foto_url)!}
             alt={produto.nome}
             fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            className="object-cover group-hover:scale-110 transition-transform duration-500"
             sizes="224px"
             unoptimized
           />
         ) : (
-          // Placeholder quando não há foto
-          <div className="w-full h-full flex items-center justify-center">
-            <ShoppingCart className="w-12 h-12 text-gray-300" />
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gray-50">
+            <ShoppingCart className="w-10 h-10 text-gray-200" />
+            <span className="text-xs text-gray-300">Sem foto</span>
           </div>
         )}
+        {/* Overlay gradiente sutil */}
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/10 to-transparent" />
       </div>
 
-      {/* Informações do Produto */}
+      {/* Informações */}
       <div className="flex flex-col gap-2 p-4 flex-1">
-        {/* Nome */}
-        <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">
+        <h3 className="text-sm font-bold text-gray-900 line-clamp-2 leading-snug">
           {produto.nome}
         </h3>
 
-        {/* Descrição (opcional) */}
         {produto.descricao && (
-          <p className="text-xs text-gray-500 line-clamp-2">
+          <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
             {produto.descricao}
           </p>
         )}
@@ -125,29 +126,51 @@ export function ProductCard({
             </span>
           )}
           <span
-            className={`text-lg font-bold ${temPromocao ? "text-red-600" : "text-gray-900"}`}
+            className={`text-xl font-extrabold ${temPromocao ? "text-red-600" : "text-gray-900"}`}
           >
             {formatarPreco(precoAtivo)}
           </span>
+          {temPromocao && (
+            <span className="ml-2 text-xs text-green-600 font-semibold">
+              {Math.round(((produto.preco - precoAtivo) / produto.preco) * 100)}
+              % off
+            </span>
+          )}
         </div>
 
-        {/* Botões de Ação */}
-        <div className="flex flex-col gap-2 mt-2">
-          {/* Botão Comprar — abre WhatsApp com 1 unidade diretamente */}
+        {/* Botões */}
+        <div className="flex flex-col gap-2 mt-3">
           <a
             href={linkComprar}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold py-2 rounded-xl transition-colors duration-200"
+            className="flex items-center justify-center gap-1.5 bg-green-500 hover:bg-green-600 active:scale-95 text-white text-xs font-bold py-2.5 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
           >
             <Zap className="w-3.5 h-3.5" />
-            Comprar
+            Comprar agora
           </a>
 
-          {/* Botão Adicionar ao Carrinho */}
           <button
             onClick={handleAdicionarCarrinho}
-            className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold py-2 rounded-xl transition-colors duration-200"
+            className="flex items-center justify-center gap-1.5 border-2 text-xs font-bold py-2 rounded-xl transition-all duration-200 active:scale-95 hover:text-white"
+            style={
+              {
+                "--border-col": corPrimaria,
+                "--text-col": corPrimaria,
+                borderColor: corPrimaria,
+                color: corPrimaria,
+              } as React.CSSProperties
+            }
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                corPrimaria;
+              (e.currentTarget as HTMLButtonElement).style.color = "white";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                "transparent";
+              (e.currentTarget as HTMLButtonElement).style.color = corPrimaria;
+            }}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
             Adicionar ao carrinho

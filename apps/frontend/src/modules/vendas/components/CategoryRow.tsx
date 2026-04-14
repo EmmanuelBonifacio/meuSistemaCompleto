@@ -23,6 +23,8 @@ interface CategoryRowProps {
   produtos: ProdutoVenda[];
   whatsappNumber: string;
   onAdicionarCarrinho: (item: Omit<ItemCarrinho, "quantidade">) => void;
+  corPrimaria?: string;
+  corClara?: string;
 }
 
 // =============================================================================
@@ -33,53 +35,62 @@ export function CategoryRow({
   produtos,
   whatsappNumber,
   onAdicionarCarrinho,
+  corPrimaria = "#4f46e5",
+  corClara = "#eef2ff",
 }: CategoryRowProps) {
-  // Ref para o container scrollável — usado pelos botões de seta
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Avança ou recua o scroll ao clicar nas setas
   const scrollBy = (direcao: "esquerda" | "direita") => {
     if (!scrollRef.current) return;
-    const largura = scrollRef.current.clientWidth * 0.75; // 75% da largura visível
+    const largura = scrollRef.current.clientWidth * 0.75;
     scrollRef.current.scrollBy({
       left: direcao === "direita" ? largura : -largura,
       behavior: "smooth",
     });
   };
 
-  // Nome amigável da categoria (ex: "lancamentos" → "Lançamentos")
   const nomeCategoria = CATEGORIAS_LABEL[categoria] ?? categoria;
-
-  // A categoria "lancamentos" tem visual especial
   const isLancamentos = categoria === "lancamentos";
+  const isPromocoes = categoria === "promocoes";
 
   if (produtos.length === 0) return null;
 
   return (
     <section
-      className={`py-8 ${isLancamentos ? "bg-gradient-to-r from-indigo-50 to-purple-50" : ""}`}
+      className="py-8"
+      style={
+        isLancamentos || isPromocoes
+          ? {
+              background: `linear-gradient(135deg, ${corClara} 0%, white 100%)`,
+            }
+          : {}
+      }
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Cabeçalho da Fileira */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Cabeçalho da fileira */}
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            {/* Indicador visual especial para Lançamentos */}
+            {/* Barra colorida lateral — usa a cor da marca */}
+            <span
+              className="inline-block w-1.5 h-7 rounded-full"
+              style={{ backgroundColor: corPrimaria }}
+            />
+            <h2 className="text-xl font-bold text-gray-900">{nomeCategoria}</h2>
             {isLancamentos && (
-              <span className="inline-block w-2 h-6 bg-indigo-600 rounded-full" />
-            )}
-            <h2
-              className={`text-xl font-bold ${isLancamentos ? "text-indigo-900" : "text-gray-900"}`}
-            >
-              {nomeCategoria}
-            </h2>
-            {isLancamentos && (
-              <span className="text-xs bg-indigo-600 text-white px-2 py-0.5 rounded-full font-medium">
+              <span
+                className="text-xs text-white px-2.5 py-0.5 rounded-full font-semibold"
+                style={{ backgroundColor: corPrimaria }}
+              >
                 {produtos.length} produtos
+              </span>
+            )}
+            {isPromocoes && (
+              <span className="text-xs bg-red-500 text-white px-2.5 py-0.5 rounded-full font-semibold animate-pulse">
+                🔥 Oferta
               </span>
             )}
           </div>
 
-          {/* Botões de navegação — aparecem ao hover no container */}
           <div className="flex gap-2">
             <button
               onClick={() => scrollBy("esquerda")}
@@ -98,10 +109,10 @@ export function CategoryRow({
           </div>
         </div>
 
-        {/* Container com scroll horizontal e snap */}
+        {/* Container scrollável */}
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory scrollbar-hide"
+          className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {produtos.map((produto) => (
@@ -110,6 +121,7 @@ export function CategoryRow({
                 produto={produto}
                 whatsappNumber={whatsappNumber}
                 onAdicionarCarrinho={onAdicionarCarrinho}
+                corPrimaria={corPrimaria}
               />
             </div>
           ))}

@@ -91,9 +91,15 @@ const MENSAGEM_INICIAL: MensagemChat = {
 // =============================================================================
 interface FakeChatWidgetProps {
   whatsappNumber: string;
+  corPrimaria?: string;
+  nomeLoja?: string;
 }
 
-export function FakeChatWidget({ whatsappNumber }: FakeChatWidgetProps) {
+export function FakeChatWidget({
+  whatsappNumber,
+  corPrimaria = "#22c55e",
+  nomeLoja = "Atendimento",
+}: FakeChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([
     MENSAGEM_INICIAL,
@@ -170,15 +176,18 @@ export function FakeChatWidget({ whatsappNumber }: FakeChatWidgetProps) {
       {isOpen && (
         <div className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden">
           {/* Header do Chat */}
-          <div className="flex items-center gap-3 bg-green-500 p-3">
+          <div
+            className="flex items-center gap-3 p-3"
+            style={{ backgroundColor: corPrimaria }}
+          >
             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
               <Bot className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-white font-semibold text-sm">Atendimento</p>
+              <p className="text-white font-semibold text-sm">{nomeLoja}</p>
               <div className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
-                <p className="text-green-100 text-xs">Online agora</p>
+                <span className="w-2 h-2 bg-white/60 rounded-full animate-pulse" />
+                <p className="text-white/80 text-xs">Online agora</p>
               </div>
             </div>
             <button
@@ -240,7 +249,8 @@ export function FakeChatWidget({ whatsappNumber }: FakeChatWidgetProps) {
               <button
                 onClick={enviarMensagem}
                 disabled={!textoDigitado.trim()}
-                className="flex items-center justify-center w-9 h-9 bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded-xl transition-colors"
+                className="flex items-center justify-center w-9 h-9 disabled:opacity-50 rounded-xl transition-all hover:opacity-90 active:scale-95"
+                style={{ backgroundColor: corPrimaria }}
                 aria-label="Enviar mensagem"
               >
                 <Send className="w-4 h-4 text-white" />
@@ -252,7 +262,8 @@ export function FakeChatWidget({ whatsappNumber }: FakeChatWidgetProps) {
               href={linkWhatsApp}
               target="_blank"
               rel="noopener noreferrer"
-              className="block text-center text-xs text-green-600 hover:text-green-700 font-medium"
+              className="block text-center text-xs font-medium hover:underline"
+              style={{ color: corPrimaria }}
             >
               📱 Falar diretamente no WhatsApp
             </a>
@@ -266,7 +277,8 @@ export function FakeChatWidget({ whatsappNumber }: FakeChatWidgetProps) {
         aria-label={
           isOpen ? "Fechar chat de atendimento" : "Abrir chat de atendimento"
         }
-        className="flex items-center justify-center w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+        className="flex items-center justify-center w-14 h-14 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 hover:opacity-90"
+        style={{ backgroundColor: corPrimaria }}
       >
         {isOpen ? (
           <X className="w-6 h-6" />

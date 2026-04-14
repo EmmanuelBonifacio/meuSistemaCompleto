@@ -23,6 +23,14 @@ import type { ItemCarrinho } from "@/types/vendas.types";
 import { gerarLinkWhatsAppCarrinho } from "@/modules/vendas/lib/whatsapp";
 import { createPedido } from "@/services/vendas.service";
 
+// Resolve URL relativa para absoluta (corrige imagens do carrinho)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+function resolveImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_BASE}${url}`;
+}
+
 // =============================================================================
 // PROPS
 // =============================================================================
@@ -36,6 +44,7 @@ interface CartDrawerProps {
   onAtualizarQuantidade: (produtoId: string, quantidade: number) => void;
   onRemoverItem: (produtoId: string) => void;
   onLimparCarrinho: () => void;
+  corPrimaria?: string;
 }
 
 // =============================================================================
@@ -51,6 +60,7 @@ export function CartDrawer({
   onAtualizarQuantidade,
   onRemoverItem,
   onLimparCarrinho,
+  corPrimaria = "#4f46e5",
 }: CartDrawerProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -139,15 +149,16 @@ export function CartDrawer({
                 key={item.produto_id}
                 className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
               >
-                {/* Foto do item */}
-                <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                {/* Foto do item — corrige URLs relativas */}
+                <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                   {item.foto_url ? (
                     <Image
-                      src={item.foto_url}
+                      src={resolveImageUrl(item.foto_url)!}
                       alt={item.nome}
                       fill
                       className="object-cover"
                       sizes="64px"
+                      unoptimized
                     />
                   ) : (
                     <ShoppingBag className="w-8 h-8 text-gray-300 m-auto mt-4" />
@@ -156,13 +167,16 @@ export function CartDrawer({
 
                 {/* Informações do item */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
                     {item.nome}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    {formatarMoeda(item.preco)} cada
+                  <p className="text-xs text-gray-500">
+                    {formatarMoeda(item.preco)} / un.
                   </p>
-                  <p className="text-sm font-semibold text-indigo-600">
+                  <p
+                    className="text-sm font-bold"
+                    style={{ color: corPrimaria }}
+                  >
                     {formatarMoeda(item.preco * item.quantidade)}
                   </p>
                 </div>
@@ -226,7 +240,7 @@ export function CartDrawer({
             <button
               onClick={handleFinalizarWhatsApp}
               disabled={isPending}
-              className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 disabled:opacity-70 text-white font-bold py-3.5 rounded-2xl transition-colors duration-200 text-sm"
+              className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 active:scale-95 disabled:opacity-70 text-white font-bold py-3.5 rounded-2xl transition-all duration-200 text-sm shadow-md hover:shadow-lg"
             >
               <MessageCircle className="w-5 h-5" />
               Finalizar no WhatsApp
