@@ -147,8 +147,6 @@ export default function LoginPage() {
               Entrar
             </Button>
           </form>
-
-
         </CardContent>
       </Card>
     </div>
