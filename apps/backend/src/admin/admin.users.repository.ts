@@ -81,7 +81,7 @@ export async function findTenantUserById(
     return tx.$queryRawUnsafe<TenantUser[]>(
       `SELECT id, email, name, role, is_active, created_at, updated_at
        FROM users
-       WHERE id = $1
+       WHERE id = $1::uuid
        LIMIT 1`,
       userId,
     );
@@ -192,7 +192,7 @@ export async function updateTenantUser(
     return tx.$queryRawUnsafe<TenantUser[]>(
       `UPDATE users
        SET ${setClauses.join(", ")}
-       WHERE id = $${paramIndex}
+       WHERE id = $${paramIndex}::uuid
        RETURNING id, email, name, role, is_active, created_at, updated_at`,
       ...values,
     );
@@ -222,7 +222,7 @@ export async function resetTenantUserPassword(
     await tx.$queryRawUnsafe(
       `UPDATE users
        SET password_hash = $1, updated_at = NOW()
-       WHERE id = $2`,
+       WHERE id = $2::uuid`,
       newPasswordHash,
       userId,
     );
@@ -247,6 +247,6 @@ export async function deleteTenantUser(
   userId: string,
 ): Promise<void> {
   await withTenantSchema(schemaName, async (tx) => {
-    await tx.$queryRawUnsafe(`DELETE FROM users WHERE id = $1`, userId);
+    await tx.$queryRawUnsafe(`DELETE FROM users WHERE id = $1::uuid`, userId);
   });
 }

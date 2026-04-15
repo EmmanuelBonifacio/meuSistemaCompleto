@@ -120,9 +120,16 @@ apiInstance.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 401) {
-      // Token expirado ou inválido — limpar sessão e redirecionar para login
-      if (typeof window !== "undefined") {
-        const isAdminRoute = error.config?.url?.startsWith("/admin");
+      // Não redirecionar se o próprio endpoint de login/logout retornou 401
+      // (credenciais inválidas) — nesses casos o componente deve tratar o erro.
+      const url = error.config?.url ?? "";
+      const isAuthEndpoint =
+        url === "/auth/login" ||
+        url === "/auth/logout" ||
+        url === "/admin/login";
+
+      if (!isAuthEndpoint && typeof window !== "undefined") {
+        const isAdminRoute = url.startsWith("/admin");
 
         if (isAdminRoute) {
           // Rota admin: limpa token admin e redireciona para /admin/login
