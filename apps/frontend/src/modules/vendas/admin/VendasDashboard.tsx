@@ -144,6 +144,7 @@ export function VendasDashboard() {
             nome_loja: null,
             logo_url: null,
             tenant_name: null,
+            categorias: null as string[] | null,
           })),
         ],
       );
