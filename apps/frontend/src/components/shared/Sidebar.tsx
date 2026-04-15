@@ -35,6 +35,7 @@ import {
   Package,
   DollarSign,
   Tv,
+  ShoppingCart,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -73,6 +74,11 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
     icon: Tv,
     label: "Controle de TVs",
     path: "tv",
+  },
+  vendas: {
+    icon: ShoppingCart,
+    label: "Vendas",
+    path: "vendas/admin",
   },
 };
 
@@ -141,7 +147,10 @@ export function Sidebar({
   const tenantBase = `/${tenantSlug}`;
 
   // Verifica se uma URL está ativa comparando com a URL atual do browser
-  const isActive = (path: string) => pathname === `${tenantBase}/${path}`;
+  const isActive = (path: string) => {
+    const fullPath = `${tenantBase}/${path}`;
+    return pathname === fullPath || pathname.startsWith(`${fullPath}/`);
+  };
 
   return (
     <aside
