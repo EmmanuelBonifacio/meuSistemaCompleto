@@ -134,12 +134,12 @@ function gerarPaleta(imageUrl: string): Promise<Paleta> {
         }
         let maxCount = 0;
         let dominante = "79,70,229";
-        for (const [key, count] of mapa) {
+        mapa.forEach((count, key) => {
           if (count > maxCount) {
             maxCount = count;
             dominante = key;
           }
-        }
+        });
         const [r, g, b] = dominante.split(",").map(Number);
         const primaria = rgbToHex(r, g, b);
         const lum = luminanciaRelativa(r, g, b);
