@@ -5,9 +5,7 @@
 // O QUE FAZ:
 //   Página de login do tenant. Exibe formulário com e-mail e senha.
 //   Ao autenticar com sucesso, redireciona para /<slug>/dashboard.
-//
-//   IMPORTANTE: Esta página usa o endpoint /dev/token que é de desenvolvimento.
-//   Em produção, o backend deve expor um endpoint de login com produção segura.
+//   Usa POST /auth/login com { slug, email, password }.
 // =============================================================================
 
 import type { Metadata } from "next";
@@ -150,10 +148,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Nota de desenvolvimento */}
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Ambiente de desenvolvimento &mdash; endpoint <code>/dev/token</code>
-          </p>
+
         </CardContent>
       </Card>
     </div>

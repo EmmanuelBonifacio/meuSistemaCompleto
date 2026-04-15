@@ -22,6 +22,7 @@ import {
   UserX,
   Eye,
   EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -536,6 +537,15 @@ export function TenantModal({ tenant, onClose }: TenantModalProps) {
               <p className="text-xs text-muted-foreground font-mono">
                 {tenant.slug}
               </p>
+              <a
+                href={`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/${tenant.slug}/login`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[10px] text-primary hover:underline mt-0.5"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Abrir login do tenant
+              </a>
             </div>
           </div>
           <button
