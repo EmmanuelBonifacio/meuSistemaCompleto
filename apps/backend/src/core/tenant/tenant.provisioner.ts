@@ -158,6 +158,9 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
       --   usuário logado. Um token de sessão dedicado — rotacionável,
       --   revogável por device — é mais seguro e mais simples de gerenciar.
       socket_token    UUID         DEFAULT gen_random_uuid(),
+      device_role     VARCHAR(20)  NOT NULL DEFAULT 'CLIENT'
+                      CONSTRAINT tv_devices_device_role_check
+                      CHECK (device_role IN ('CLIENT','PLATFORM_ADS')),
       --
       created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
       updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -168,6 +171,25 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // Índice para buscar rapidamente dispositivos online (uso frequente no dashboard)
     `CREATE INDEX IF NOT EXISTS idx_tv_devices_status
       ON "${schemaName}".tv_devices (status)`,
+
+    // -----------------------------------------------------------------
+    // TABELA: tenant_tv_plan (Plano de TVs por tenant — Fase TV / Xibo)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".tenant_tv_plan (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      plan_tier VARCHAR(10) NOT NULL
+        CONSTRAINT tenant_tv_plan_tier_check
+        CHECK (plan_tier IN ('THREE','FIVE','TEN','CUSTOM')),
+      plan_mode VARCHAR(20) NOT NULL
+        CONSTRAINT tenant_tv_plan_mode_check
+        CHECK (plan_mode IN ('SELF','PARTNERSHIP','OWNER_PLACED')),
+      max_client_tvs INTEGER NOT NULL DEFAULT 5,
+      platform_screen_share_percent INTEGER DEFAULT 0,
+      platform_profit_share_percent INTEGER DEFAULT 0,
+      platform_reserved_tv_count INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`,
 
     // -----------------------------------------------------------------
     // TABELA: tv_command_logs (Histórico de Comandos — Módulo TV)
@@ -442,6 +464,14 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     `INSERT INTO "${schemaName}".venda_config (id)
       VALUES (1)
       ON CONFLICT DO NOTHING`,
+
+    // Plano TV padrão (equivalente ao limite histórico de 5 TVs só cliente)
+    `INSERT INTO "${schemaName}".tenant_tv_plan (
+      plan_tier, plan_mode, max_client_tvs,
+      platform_screen_share_percent, platform_profit_share_percent, platform_reserved_tv_count
+    )
+    SELECT 'CUSTOM', 'SELF', 5, 0, 0, 0
+    WHERE NOT EXISTS (SELECT 1 FROM "${schemaName}".tenant_tv_plan LIMIT 1)`,
   ];
 }
 
