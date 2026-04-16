@@ -6,10 +6,9 @@
 //   na tabela `tv_devices` passa por aqui — controller e service não tocam
 //   no banco de dados diretamente.
 //
-// REGRA DE NEGÓCIO CRÍTICA:
-//   Máximo de 5 dispositivos por tenant (TV_MAX_LIMIT).
-//   Esta verificação é feita ANTES de cada INSERT, gerando um erro com código
-//   customizado 'TV_LIMIT_EXCEEDED' que o controller trata como HTTP 422.
+// REGRA DE NEGÓCIO — Limite de TVs CLIENT:
+//   O POST /tv/devices usa o middleware checkTvLimit (tv.limit.middleware.ts),
+//   que consulta tenant_tv_plan e conta apenas device_role = 'CLIENT'.
 //
 // ISOLAMENTO MULTI-TENANT:
 //   Toda função recebe `schemaName` e usa `withTenantSchema()`.
@@ -19,14 +18,6 @@
 
 import { withTenantSchema } from "../../core/database/prisma";
 import { RegisterTvDeviceInput, UpdateTvDeviceInput } from "./tv.schema";
-
-// =============================================================================
-// CONSTANTE: TV_MAX_LIMIT
-// =============================================================================
-// Regra de negócio: limite máximo de TVs por tenant.
-// Centralizado aqui para facilitar alteração futura (ex: por plano de assinatura).
-// =============================================================================
-export const TV_MAX_LIMIT = 5;
 
 // =============================================================================
 // TIPO: TvDevice
@@ -48,6 +39,7 @@ export interface TvDevice {
   chromecast_id: string | null;
   // socket_token: UUID que autentica o receiver.html da TV no WebSocket
   socket_token: string | null;
+  device_role: "CLIENT" | "PLATFORM_ADS";
   created_at: Date;
   updated_at: Date;
 }
@@ -58,7 +50,6 @@ export interface TvDevice {
 export interface TvDeviceListResult {
   devices: TvDevice[];
   total: number;
-  limite_maximo: number; // informativo: lembra o consumidor do limite de 5
 }
 
 // =============================================================================
@@ -84,7 +75,7 @@ export async function findAllTvDevices(
       `SELECT
          id, name, ip_address, mac_address, status,
          current_content, last_seen_at,
-         chromecast_id, socket_token,
+         chromecast_id, socket_token, device_role,
          created_at, updated_at
        FROM tv_devices
        ORDER BY
@@ -95,8 +86,23 @@ export async function findAllTvDevices(
     return {
       devices: rows,
       total,
-      limite_maximo: TV_MAX_LIMIT,
     };
+  });
+}
+
+// =============================================================================
+// FUNÇÃO: countTvDevicesByClientRole
+// =============================================================================
+// Conta apenas TVs do cliente (exclui PLATFORM_ADS do limite do plano).
+// =============================================================================
+export async function countTvDevicesByClientRole(
+  schemaName: string,
+): Promise<number> {
+  return withTenantSchema(schemaName, async (tx) => {
+    const countResult = await tx.$queryRawUnsafe<[{ count: string }]>(
+      `SELECT COUNT(*)::text AS count FROM tv_devices WHERE device_role = 'CLIENT'`,
+    );
+    return parseInt(countResult[0].count, 10);
   });
 }
 
@@ -114,7 +120,7 @@ export async function findTvDeviceById(
       `SELECT
          id, name, ip_address, mac_address, status,
          current_content, last_seen_at,
-         chromecast_id, socket_token,
+         chromecast_id, socket_token, device_role,
          created_at, updated_at
        FROM tv_devices
        WHERE id = $1::uuid`,
@@ -132,46 +138,19 @@ export async function findTvDeviceById(
 //   Registra uma nova TV no sistema.
 //
 // REGRA DE NEGÓCIO (implementada aqui, não no banco):
-//   Antes de inserir, conta quantos devices o tenant já tem.
-//   Se já tem TV_MAX_LIMIT (5), lança erro com código 'TV_LIMIT_EXCEEDED'.
-//   O controller captura este código e retorna HTTP 422 com mensagem amigável.
-//
-// POR QUE VERIFICAR AQUI E NÃO COM CHECK CONSTRAINT NO BANCO?
-//   Um CHECK constraint no PostgreSQL não tem acesso ao COUNT de outras linhas.
-//   Para verificar "máximo X linhas por tabela", precisamos de um trigger PL/pgSQL
-//   ou verificação na aplicação. Optamos pela aplicação para dar mensagem de erro
-//   amigável e em português. Triggers são hard de debugar e não escalam bem.
+//   O limite de TVs CLIENT é aplicado no middleware checkTvLimit antes do INSERT.
 // =============================================================================
 export async function registerTvDevice(
   schemaName: string,
   data: RegisterTvDeviceInput,
 ): Promise<TvDevice> {
   return withTenantSchema(schemaName, async (tx) => {
-    // --- VERIFICAÇÃO DO LIMITE ---
-    const countResult = await tx.$queryRawUnsafe<[{ count: string }]>(
-      `SELECT COUNT(*)::text AS count FROM tv_devices`,
-    );
-    const currentCount = parseInt(countResult[0].count, 10);
-
-    if (currentCount >= TV_MAX_LIMIT) {
-      // Lança um erro com código customizado — o controller trata como 422
-      throw {
-        code: "TV_LIMIT_EXCEEDED",
-        message:
-          `Este tenant já possui ${currentCount} de ${TV_MAX_LIMIT} TVs permitidas. ` +
-          `Remova uma TV existente antes de adicionar uma nova.`,
-        current: currentCount,
-        limit: TV_MAX_LIMIT,
-      };
-    }
-
-    // --- INSERT ---
     const rows = await tx.$queryRawUnsafe<TvDevice[]>(
       `INSERT INTO tv_devices (name, ip_address, mac_address)
        VALUES ($1, $2, $3)
        RETURNING id, name, ip_address, mac_address, status,
                  current_content, last_seen_at,
-                 chromecast_id, socket_token,
+                 chromecast_id, socket_token, device_role,
                  created_at, updated_at`,
       data.name,
       data.ip_address,
@@ -230,7 +209,7 @@ export async function updateTvDevice(
        WHERE id = $${idParamIndex}::uuid
        RETURNING id, name, ip_address, mac_address, status,
                  current_content, last_seen_at,
-                 chromecast_id, socket_token,
+                 chromecast_id, socket_token, device_role,
                  created_at, updated_at`,
       ...values,
     );

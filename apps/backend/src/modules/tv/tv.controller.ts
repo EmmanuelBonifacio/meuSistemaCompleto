@@ -34,9 +34,10 @@ import {
   updateDeviceContentAndStatus,
   saveCommandLog,
   getCommandHistory,
-  TV_MAX_LIMIT,
   rotateSocketToken,
+  countTvDevicesByClientRole,
 } from "./tv.repository";
+import { getTvLimit } from "./tvLimitService";
 import {
   discoverTvDevices,
   sendContentToDevice,
@@ -55,8 +56,10 @@ export async function listDevices(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { schemaName } = request.tenant!;
+  const { schemaName, id: tenantId } = request.tenant!;
   const result = await findAllTvDevices(schemaName);
+  const limit = await getTvLimit(tenantId);
+  const clientCount = await countTvDevicesByClientRole(schemaName);
 
   return reply.send({
     devices: result.devices.map((d) => ({
@@ -64,8 +67,8 @@ export async function listDevices(
       is_online: d.status === "online",
     })),
     total: result.total,
-    limite_maximo: result.limite_maximo,
-    slots_disponiveis: TV_MAX_LIMIT - result.total,
+    limite_maximo: limit.maxClientTvs,
+    slots_disponiveis: Math.max(0, limit.maxClientTvs - clientCount),
   });
 }
 
@@ -95,12 +98,12 @@ export async function getDevice(request: FastifyRequest, reply: FastifyReply) {
 // POST /tv/devices
 // =============================================================================
 // O QUE FAZ:
-//   Registra uma nova TV. Verifica o limite de 5 TVs por tenant.
+//   Registra uma nova TV (role CLIENT por padrão no banco). O limite por plano
+//   é aplicado no preHandler checkTvLimit (contagem só de device_role = CLIENT).
 //
 // TRATAMENTO DE ERROS:
-//   - 422 Unprocessable Entity → limite de 5 TVs atingido
+//   - 400 → limite CLIENT (checkTvLimit) ou payload inválido (Zod)
 //   - 409 Conflict → IP já cadastrado para outro dispositivo
-//   - 400 Bad Request → dados inválidos (Zod)
 // =============================================================================
 export async function registerDevice(
   request: FastifyRequest,
@@ -121,20 +124,6 @@ export async function registerDevice(
       device,
     });
   } catch (err: unknown) {
-    // Erro de limite de TVs — nosso código customizado do repository
-    if (isLimitError(err)) {
-      return reply.status(422).send({
-        statusCode: 422,
-        error: "Limite Atingido",
-        message: err.message,
-        detalhe: {
-          limite_maximo: err.limit,
-          quantidade_atual: err.current,
-          dica: "Remova um dispositivo existente (DELETE /tv/devices/:id) para liberar um slot.",
-        },
-      });
-    }
-
     // Violação de UNIQUE CONSTRAINT (ip_address único por tenant)
     // Código Prisma/PostgreSQL: P2002 (Prisma) ou "23505" (PostgreSQL direto)
     if (isUniqueConstraintError(err)) {
@@ -735,21 +724,6 @@ export async function getDeviceToken(
 // =============================================================================
 // HELPERS DE ERRO (type guards)
 // =============================================================================
-
-interface LimitError {
-  code: "TV_LIMIT_EXCEEDED";
-  message: string;
-  current: number;
-  limit: number;
-}
-
-function isLimitError(err: unknown): err is LimitError {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    (err as LimitError).code === "TV_LIMIT_EXCEEDED"
-  );
-}
 
 function isUniqueConstraintError(err: unknown): boolean {
   if (typeof err !== "object" || err === null) return false;

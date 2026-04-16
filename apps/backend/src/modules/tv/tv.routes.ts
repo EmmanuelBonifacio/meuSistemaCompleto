@@ -12,7 +12,7 @@
 // ROTAS REGISTRADAS (todas com prefixo /tv via server.ts):
 //   GET    /tv/devices              → listar todas as TVs do tenant
 //   GET    /tv/devices/:id          → detalhe de uma TV
-//   POST   /tv/devices              → registrar nova TV (limite: 5 por tenant)
+//   POST   /tv/devices              → registrar nova TV (limite por plano / CLIENT)
 //   PATCH  /tv/devices/:id          → atualizar dados de uma TV
 //   DELETE /tv/devices/:id          → remover TV (libera slot)
 //   POST   /tv/control              → enviar conteúdo via UPnP/DIAL (legado)
@@ -55,6 +55,7 @@ import {
   getMedia,
 } from "./tv.media.controller";
 import { listApps } from "./tv.apps";
+import { checkTvLimit } from "./tv.limit.middleware";
 
 // Middleware de acesso ao módulo TV (reutilizável como preHandler)
 // requireModule('tv') retorna uma função que verifica se o tenant tem
@@ -78,7 +79,7 @@ export async function tvRoutes(fastify: FastifyInstance) {
   // --------------------------------------------------------------------------
   // POST /tv/devices
   // --------------------------------------------------------------------------
-  fastify.post("/devices", { preHandler: guards }, registerDevice);
+  fastify.post("/devices", { preHandler: [...guards, checkTvLimit] }, registerDevice);
 
   // --------------------------------------------------------------------------
   // PATCH /tv/devices/:id
