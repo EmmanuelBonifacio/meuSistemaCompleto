@@ -32,6 +32,7 @@ import { tvRoutes } from "./modules/tv/tv.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { vendasRoutes } from "./modules/vendas/vendas.routes";
 import { registerRequestLoggerHook } from "./core/middleware/request-logger.hook";
+import { xiboRoutes } from "./routes/xibo/xibo.routes";
 
 // =============================================================================
 // FUNÇÃO: buildServer
@@ -357,6 +358,9 @@ async function buildServer() {
 
   // Módulo SalesWpp — Catálogo de Vendas com Checkout via WhatsApp
   await app.register(vendasRoutes, { prefix: "/vendas" });
+
+  // API Xibo (DataSet remoto — auth por ?token=, sem JWT de usuário)
+  await app.register(xiboRoutes, { prefix: "/api/v1/xibo" });
 
   // ==========================================================================
   // ROTA: GET /modules/status — lista módulos ativos para o tenant logado

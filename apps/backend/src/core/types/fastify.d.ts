@@ -27,6 +27,7 @@
 // "módulo" e não um script global. Sem isto, a augmentação não funciona.
 import "fastify";
 import "@fastify/jwt";
+import type { XiboTenantContext } from "../../routes/xibo/xiboTenantResolver.service";
 
 // =============================================================================
 // TIPO: TenantContext
@@ -71,6 +72,9 @@ declare module "fastify" {
      * usar o operador "!" (non-null assertion) ou verificar antes de usar.
      */
     tenant?: TenantContext;
+
+    /** Preenchido pelas rotas /api/v1/xibo/* após validar ?token= */
+    xiboTenant?: XiboTenantContext;
   }
 }
 

@@ -192,6 +192,26 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     )`,
 
     // -----------------------------------------------------------------
+    // TABELA: xibo_platform_ads (Anúncios plataforma — feed Xibo)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".xibo_platform_ads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      titulo VARCHAR(255) NOT NULL,
+      video_url TEXT NOT NULL,
+      duracao_segundos INTEGER NOT NULL DEFAULT 30
+        CONSTRAINT xibo_platform_ads_duration_check
+        CHECK (duracao_segundos > 0 AND duracao_segundos <= 86400),
+      thumb_url TEXT,
+      ativo BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
+    `CREATE INDEX IF NOT EXISTS idx_xibo_platform_ads_ativo
+      ON "${schemaName}".xibo_platform_ads (ativo)
+      WHERE ativo = true`,
+
+    // -----------------------------------------------------------------
     // TABELA: tv_command_logs (Histórico de Comandos — Módulo TV)
     // -----------------------------------------------------------------
     // Registra cada vez que o tenant envia um comando para uma TV.
