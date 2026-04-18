@@ -1,5 +1,5 @@
 ﻿// =============================================================================
-// src/app/[slug]/vendas/page.tsx â€” Vitrine PÃºblica (design profissional)
+// src/app/[slug]/vendas/page.tsx — Vitrine PÃºblica (design profissional)
 // =============================================================================
 
 "use client";
@@ -27,7 +27,7 @@ import {
 import type { ProdutoVenda } from "@/types/vendas.types";
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
 
-// Ordem das categorias â€” LanÃ§amentos SEMPRE primeiro
+// Ordem das categorias — LanÃ§amentos SEMPRE primeiro
 const ORDEM_CATEGORIAS = [
   "lancamentos",
   "mais-vendidos",
@@ -201,7 +201,7 @@ export default function VendasPage() {
       .finally(() => setIsLoading(false));
   }, [params.slug]);
 
-  // Carrega configuraÃ§Ãµes da loja
+  // Carrega configurações da loja
   useEffect(() => {
     getVendasConfig(params.slug)
       .then((cfg) => {
@@ -272,7 +272,7 @@ export default function VendasPage() {
   return (
     <>
       {/* ===================================================================
-          HEADER sticky â€” glass morphism
+          HEADER sticky — glass morphism
       =================================================================== */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
@@ -336,7 +336,7 @@ export default function VendasPage() {
       </header>
 
       {/* ===================================================================
-          HERO BANNER â€” gradiente gerado da logo do cliente
+          HERO BANNER — gradiente gerado da logo do cliente
       =================================================================== */}
       <section
         className="relative overflow-hidden"
@@ -344,7 +344,7 @@ export default function VendasPage() {
           background: `linear-gradient(135deg, ${paleta.primaria} 0%, ${paleta.secundaria} 100%)`,
         }}
       >
-        {/* PadrÃ£o de pontos decorativo */}
+        {/* Padrão de pontos decorativo */}
         <div
           className="absolute inset-0 opacity-[0.07]"
           style={{
@@ -386,7 +386,7 @@ export default function VendasPage() {
             {nomeLoja || "Nossa Loja"}
           </h1>
           <p className="text-white/85 text-base sm:text-lg mb-8 max-w-md leading-relaxed">
-            Os melhores produtos com preÃ§os incrÃ­veis.
+            Os melhores produtos com preços incríveis.
             <br className="hidden sm:block" />
             Compre agora e finalize pelo WhatsApp!
           </p>
@@ -394,7 +394,7 @@ export default function VendasPage() {
           {/* Trust badges */}
           <div className="flex flex-wrap items-center justify-center gap-3">
             {[
-              { icon: Truck, label: "Entrega RÃ¡pida" },
+              { icon: Truck, label: "Entrega Rápida" },
               { icon: Shield, label: "Compra Segura" },
               { icon: MessageCircle, label: "Atendimento no WhatsApp" },
             ].map(({ icon: Icon, label }) => (
@@ -542,7 +542,7 @@ export default function VendasPage() {
               />
             </div>
             <p className="text-gray-700 font-semibold text-xl">
-              Nenhum produto disponÃ­vel ainda
+              Nenhum produto disponível ainda
             </p>
             <p className="text-gray-400 text-sm">
               Em breve novidades por aqui!
@@ -572,13 +572,13 @@ export default function VendasPage() {
             {nomeLoja || params.slug}
           </p>
           <p className="text-sm text-gray-400 max-w-xs">
-            Compras seguras e cÃ³modas via WhatsApp.
+            Compras seguras e cômodas via WhatsApp.
             <br />
-            Atendimento rÃ¡pido e confiÃ¡vel!
+            Atendimento rápido e confiável!
           </p>
           {whatsappNumber && (
             <a
-              href={`https://wa.me/${whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent("OlÃ¡! Preciso de ajuda com um pedido.")}`}
+              href={`https://wa.me/${whatsappNumber.replace(/\D/g, "")}?text=${encodeURIComponent("Olá! Preciso de ajuda com um pedido.")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors shadow-md hover:shadow-lg"
@@ -588,7 +588,7 @@ export default function VendasPage() {
             </a>
           )}
           <p className="text-xs text-gray-300 mt-2">
-            Â© {new Date().getFullYear()} {nomeLoja} â€” Todos os direitos
+            © {new Date().getFullYear()} {nomeLoja} — Todos os direitos
             reservados
           </p>
         </div>
