@@ -43,7 +43,12 @@ function buildTenantTvPlanMigrationSql(schemaName: string): string[] {
     )`,
 
     `ALTER TABLE "${schemaName}".tv_devices
-      ADD COLUMN IF NOT EXISTS device_role VARCHAR(20) NOT NULL DEFAULT 'CLIENT'
+      ADD COLUMN IF NOT EXISTS device_role VARCHAR(20) NOT NULL DEFAULT 'CLIENT'`,
+
+    // Constraint nomeada separada: ADD CONSTRAINT inline no ADD COLUMN falha
+    // silenciosamente em algumas versões do PostgreSQL quando a coluna já existe.
+    `ALTER TABLE "${schemaName}".tv_devices
+      ADD CONSTRAINT IF NOT EXISTS tv_devices_device_role_check
       CHECK (device_role IN ('CLIENT','PLATFORM_ADS'))`,
 
     `INSERT INTO "${schemaName}".tenant_tv_plan (

@@ -51,6 +51,17 @@ export const RegisterTvDeviceSchema = z.object({
       "MAC Address inválido. Use formato AA:BB:CC:DD:EE:FF",
     )
     .optional(),
+
+  // device_role distingue TVs do cliente de TVs da plataforma (PLATFORM_ADS).
+  // Padrão: CLIENT — TVs da plataforma são registradas pelo admin do sistema.
+  device_role: z
+    .enum(["CLIENT", "PLATFORM_ADS"], {
+      errorMap: () => ({
+        message: "device_role deve ser 'CLIENT' ou 'PLATFORM_ADS'",
+      }),
+    })
+    .optional()
+    .default("CLIENT"),
 });
 
 // =============================================================================

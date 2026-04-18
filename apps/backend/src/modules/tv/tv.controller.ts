@@ -37,13 +37,36 @@ import {
   rotateSocketToken,
   countTvDevicesByClientRole,
 } from "./tv.repository";
-import { getTvLimit } from "./tvLimitService";
+import { getTvLimit, getTvPlan } from "./tvLimitService";
 import {
   discoverTvDevices,
   sendContentToDevice,
   sendWakeOnLan,
 } from "./tv.service";
 import { castToDevice } from "./tv.cast";
+
+// =============================================================================
+// HANDLER: getTvPlanHandler
+// GET /tv/plan
+// =============================================================================
+// Retorna o plano de TVs do tenant com uso atual para o painel /admin/tv/planos.
+// =============================================================================
+export async function getTvPlanHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const { schemaName, id: tenantId } = request.tenant!;
+  const [plan, clientCount] = await Promise.all([
+    getTvPlan(tenantId),
+    countTvDevicesByClientRole(schemaName),
+  ]);
+
+  return reply.send({
+    ...plan,
+    tvs_em_uso: clientCount,
+    slots_disponiveis: Math.max(0, plan.max_client_tvs - clientCount),
+  });
+}
 
 // =============================================================================
 // HANDLER: listDevices

@@ -34,9 +34,9 @@ const RESPOSTAS = [
       "🚚 Trabalhamos com frete via Correios e transportadoras. O prazo de entrega varia de 3 a 8 dias úteis dependendo da sua região. Para calcular o frete, basta fechar o pedido pelo WhatsApp!",
   },
   {
-    palavrasChave: ["pagamento", "pagar", "pix", "boleto", "cartão", "cartao"],
+    palavrasChave: ["pagamento", "pagar", "pix", "cartão", "cartao"],
     resposta:
-      "💳 Aceitamos PIX (à vista), cartão de crédito em até 12x e boleto bancário. Para parcelamento, finalize pelo WhatsApp e informe sua preferência!",
+      "💳 Aceitamos PIX (à vista), cartão de crédito em até 12x . Para parcelamento, finalize pelo WhatsApp e informe sua preferência!",
   },
   {
     palavrasChave: ["troca", "devolução", "devolver", "trocar", "garantia"],

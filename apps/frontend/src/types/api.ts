@@ -205,6 +205,7 @@ export interface TvDevice {
   mac_address?: string;
   status?: "online" | "offline"; // campo real do banco
   is_online: boolean; // mapeado pelo backend: status === 'online'
+  device_role: "CLIENT" | "PLATFORM_ADS";
   socket_token?: string | null;
   current_content?: string;
   last_seen_at?: string | null;
@@ -214,7 +215,7 @@ export interface TvDevice {
 
 /**
  * Resposta da listagem de dispositivos TV: GET /tv/devices
- * Inclui informações sobre os slots disponíveis (máximo 5 por tenant).
+ * Inclui informações sobre os slots disponíveis (dinâmico por plano).
  */
 export interface TvDeviceListResponse {
   devices: TvDevice[];
@@ -230,6 +231,21 @@ export interface RegisterTvDeviceInput {
   name: string;
   ip_address: string;
   mac_address?: string;
+  device_role?: "CLIENT" | "PLATFORM_ADS";
+}
+
+/**
+ * Plano de TVs do tenant: GET /tv/plan
+ */
+export interface TvPlan {
+  plan_tier: "THREE" | "FIVE" | "TEN" | "CUSTOM";
+  plan_mode: "SELF" | "PARTNERSHIP" | "OWNER_PLACED";
+  max_client_tvs: number;
+  platform_screen_share_percent: number;
+  platform_profit_share_percent: number;
+  platform_reserved_tv_count: number;
+  tvs_em_uso: number;
+  slots_disponiveis: number;
 }
 
 /**

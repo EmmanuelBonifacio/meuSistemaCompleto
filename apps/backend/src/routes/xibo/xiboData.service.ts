@@ -63,26 +63,6 @@ export async function listXiboPlatformAds(
   schemaName: string,
 ): Promise<XiboPlatformAdRow[]> {
   return withTenantSchema(schemaName, async (tx) => {
-    await tx.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "${schemaName}".xibo_platform_ads (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        titulo VARCHAR(255) NOT NULL,
-        video_url TEXT NOT NULL,
-        duracao_segundos INTEGER NOT NULL DEFAULT 30
-          CONSTRAINT xibo_platform_ads_duration_check
-          CHECK (duracao_segundos > 0 AND duracao_segundos <= 86400),
-        thumb_url TEXT,
-        ativo BOOLEAN NOT NULL DEFAULT true,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-    await tx.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS idx_xibo_platform_ads_ativo
-        ON "${schemaName}".xibo_platform_ads (ativo)
-        WHERE ativo = true
-    `);
-
     const rows = await tx.$queryRawUnsafe<XiboPlatformAdRow[]>(
       `SELECT id::text AS id, titulo, video_url, duracao_segundos, thumb_url
        FROM xibo_platform_ads

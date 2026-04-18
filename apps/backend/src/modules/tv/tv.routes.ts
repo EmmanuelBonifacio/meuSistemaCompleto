@@ -10,6 +10,7 @@
 //   2. requireModule('tv') → Você tem acesso a este módulo? (autorização por module)
 //
 // ROTAS REGISTRADAS (todas com prefixo /tv via server.ts):
+//   GET    /tv/plan                 → plano do tenant (tier, modo, limites, uso atual)
 //   GET    /tv/devices              → listar todas as TVs do tenant
 //   GET    /tv/devices/:id          → detalhe de uma TV
 //   POST   /tv/devices              → registrar nova TV (limite por plano / CLIENT)
@@ -47,6 +48,7 @@ import {
   castToTv,
   pairDevice,
   getDeviceToken,
+  getTvPlanHandler,
 } from "./tv.controller";
 import {
   listMedia,
@@ -65,6 +67,11 @@ const requireTvModule = requireModule("tv");
 export async function tvRoutes(fastify: FastifyInstance) {
   // Prehandler padrão para TODAS as rotas deste plugin
   const guards = [tenantMiddleware, requireTvModule];
+
+  // --------------------------------------------------------------------------
+  // GET /tv/plan
+  // --------------------------------------------------------------------------
+  fastify.get("/plan", { preHandler: guards }, getTvPlanHandler);
 
   // --------------------------------------------------------------------------
   // GET /tv/devices

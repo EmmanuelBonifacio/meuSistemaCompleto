@@ -34,6 +34,8 @@ import {
   FolderOpen,
   LayoutGrid,
   Monitor,
+  ListVideo,
+  Tv2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,10 +50,12 @@ import { TvAppsModal } from "./TvAppsModal";
 import { ScreenShareModal } from "./ScreenShareModal";
 import { PairTvModal } from "./PairTvModal";
 import * as tvService from "@/services/tv.service";
-import type { TvDevice } from "@/types/api";
+import type { TvDevice, TvDeviceListResponse } from "@/types/api";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 
-// Espelha TV_MAX_LIMIT do Backend
-const TV_MAX_SLOTS = 5;
+// Espelha TV_MAX_LIMIT do Backend — fallback para quando ainda não carregou
+const TV_MAX_SLOTS_FALLBACK = 5;
 
 // Intervalo de polling silencioso (em ms)
 const POLLING_INTERVAL_MS = 30_000;
@@ -62,9 +66,14 @@ const POLLING_INTERVAL_MS = 30_000;
 export function TvGrid() {
   // ── Dados ──────────────────────────────────────────────────────────────────
   const [devices, setDevices] = useState<TvDevice[]>([]);
+  const [listData, setListData] = useState<TvDeviceListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Slug para links de navegação
+  const params = useParams<{ slug?: string }>();
+  const slug = params?.slug ?? "";
 
   // ── Modais ─────────────────────────────────────────────────────────────────
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -96,6 +105,7 @@ export function TvGrid() {
       const response = await tvService.listDevices();
       const list = response.devices ?? (response as any).data ?? [];
       setDevices(list);
+      setListData(response);
     } catch (err) {
       // Erros silenciosos de polling não sobrescrevem mensagem de sucesso
       if (!silent) {
@@ -192,10 +202,11 @@ export function TvGrid() {
   }
 
   // ==========================================================================
-  // MONTAGEM DA GRADE: 5 slots fixos
+  // MONTAGEM DA GRADE: slots dinâmicos (limite do plano, fallback 5)
   // ==========================================================================
   const safeDevices = devices ?? [];
-  const slots = Array.from({ length: TV_MAX_SLOTS }, (_, i) => safeDevices[i]);
+  const maxSlots = listData?.limite_maximo ?? TV_MAX_SLOTS_FALLBACK;
+  const slots = Array.from({ length: maxSlots }, (_, i) => safeDevices[i]);
 
   // ==========================================================================
   // RENDERIZAÇÃO
@@ -211,11 +222,28 @@ export function TvGrid() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {isLoading
               ? "Carregando..."
-              : `${safeDevices.length} de ${TV_MAX_SLOTS} slots utilizados`}
+              : `${safeDevices.length} de ${maxSlots} slots utilizados`}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Links para sub-páginas do módulo TV */}
+          {slug && (
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                <Link href={`/${slug}/tv/dispositivos`}>
+                  <ListVideo className="h-3.5 w-3.5" />
+                  Dispositivos
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                <Link href={`/${slug}/tv/planos`}>
+                  <Tv2 className="h-3.5 w-3.5" />
+                  Plano
+                </Link>
+              </Button>
+            </>
+          )}
           {/* Galeria de mídia (upload de vídeos/imagens) */}
           <Button
             variant="outline"
@@ -302,7 +330,7 @@ export function TvGrid() {
       {/* ── Grade de 5 slots ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {isLoading
-          ? Array.from({ length: TV_MAX_SLOTS }).map((_, i) => (
+          ? Array.from({ length: TV_MAX_SLOTS_FALLBACK }).map((_, i) => (
               <Skeleton key={i} className="h-[196px] rounded-xl" />
             ))
           : slots.map((device, index) => (

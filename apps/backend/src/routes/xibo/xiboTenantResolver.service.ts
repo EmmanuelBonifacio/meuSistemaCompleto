@@ -6,12 +6,9 @@
 
 import { prisma } from "../../core/database/prisma";
 import { isValidXiboTokenForTenant } from "./xiboToken.service";
+import type { XiboTenantContext } from "../../core/types/xibo.types";
 
-export interface XiboTenantContext {
-  id: string;
-  schemaName: string;
-  slug: string;
-}
+export type { XiboTenantContext };
 
 export async function resolveTenantFromXiboToken(
   token: string | undefined,

@@ -27,6 +27,7 @@ import api from "./api";
 import type {
   TvDevice,
   TvDeviceListResponse,
+  TvPlan,
   RegisterTvDeviceInput,
   PairDeviceResponse,
   ControlTvInput,
@@ -47,6 +48,16 @@ import type {
 // =============================================================================
 export async function listDevices(): Promise<TvDeviceListResponse> {
   const response = await api.get<TvDeviceListResponse>("/tv/devices");
+  return response.data;
+}
+
+// =============================================================================
+// FUNÇÃO: getTvPlan
+// =============================================================================
+// Retorna o plano de TVs do tenant com uso atual: GET /tv/plan
+// =============================================================================
+export async function getTvPlan(): Promise<TvPlan> {
+  const response = await api.get<TvPlan>("/tv/plan");
   return response.data;
 }
 

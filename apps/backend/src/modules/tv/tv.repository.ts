@@ -146,8 +146,8 @@ export async function registerTvDevice(
 ): Promise<TvDevice> {
   return withTenantSchema(schemaName, async (tx) => {
     const rows = await tx.$queryRawUnsafe<TvDevice[]>(
-      `INSERT INTO tv_devices (name, ip_address, mac_address)
-       VALUES ($1, $2, $3)
+      `INSERT INTO tv_devices (name, ip_address, mac_address, device_role)
+       VALUES ($1, $2, $3, $4)
        RETURNING id, name, ip_address, mac_address, status,
                  current_content, last_seen_at,
                  chromecast_id, socket_token, device_role,
@@ -155,6 +155,7 @@ export async function registerTvDevice(
       data.name,
       data.ip_address,
       data.mac_address ?? null,
+      data.device_role ?? "CLIENT",
     );
 
     return rows[0];
