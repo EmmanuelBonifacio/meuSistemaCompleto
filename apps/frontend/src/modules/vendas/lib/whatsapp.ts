@@ -8,22 +8,6 @@
 
 import type { ProdutoVenda, ItemCarrinho } from "@/types/vendas.types";
 
-const WHATSAPP_MEDIA_BASE =
-  process.env.NEXT_PUBLIC_WHATSAPP_MEDIA_BASE_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "";
-
-function resolveMediaUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
-  }
-  if (!WHATSAPP_MEDIA_BASE) return null;
-  return `${WHATSAPP_MEDIA_BASE.replace(/\/$/, "")}${trimmed}`;
-}
-
 /**
  * Formata um valor numérico como moeda brasileira.
  * Ex: 1299.9 → "R$ 1.299,90"
@@ -47,12 +31,10 @@ export function gerarLinkWhatsAppSingle(
   const quantidadeValida = Math.min(99, Math.max(1, Math.floor(quantidade)));
   const preco = produto.preco_promocional ?? produto.preco;
   const total = preco * quantidadeValida;
-  const fotoUrl = resolveMediaUrl(produto.foto_url);
   const texto = [
     "Olá! Quero comprar:",
     "",
     `- ${quantidadeValida}x ${produto.nome} - ${formatarMoeda(preco)} cada`,
-    ...(fotoUrl ? [`Foto: ${fotoUrl}`] : []),
     "",
     `*Total: ${formatarMoeda(total)}*`,
   ].join("\n");
@@ -71,13 +53,9 @@ export function gerarLinkWhatsAppCarrinho(
   itens: ItemCarrinho[],
   whatsappNumber: string,
 ): string {
-  const linhas = itens.flatMap((item) => {
-    const fotoUrl = resolveMediaUrl(item.foto_url);
-    return [
-      `- ${item.quantidade}x ${item.nome} - ${formatarMoeda(item.preco)} cada`,
-      ...(fotoUrl ? [`  Foto: ${fotoUrl}`] : []),
-    ];
-  });
+  const linhas = itens.map(
+    (item) => `- ${item.quantidade}x ${item.nome} - ${formatarMoeda(item.preco)} cada`,
+  );
 
   const total = itens.reduce((soma, i) => soma + i.preco * i.quantidade, 0);
 
