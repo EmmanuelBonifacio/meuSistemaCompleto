@@ -46,3 +46,21 @@ Data: 20/04/2026
 - Reiniciar backend apos subir alteracoes para registrar rotas novas.
 - Garantir que frontend aponta para backend correto (`NEXT_PUBLIC_API_URL`).
 - Para preview de imagem no WhatsApp, usar URL publica (nao localhost).
+
+## Atualizacao final (20/04/2026)
+
+- Commit enviado para `main` com os ajustes funcionais de financeiro, vendas e estabilidade do frontend.
+- Commit adicional de seguranca enviado para `main` com `npm audit fix` (sem breaking change) no backend e frontend.
+- Build validado com sucesso:
+  - `apps/backend`: `npm run build`
+  - `apps/frontend`: `npm run build`
+
+### Pendencias de seguranca (ainda abertas, exigem upgrade breaking)
+
+- Backend:
+  - `@fastify/jwt`/`fast-jwt` (critica) requer upgrade major para `@fastify/jwt@10`.
+  - `node-ssdp`/`ip` (alta) requer upgrade major.
+- Frontend:
+  - `next` (alta) requer upgrade major para v16+.
+
+> Recomendacao: executar esses upgrades em branch separada com bateria de testes antes de publicar em producao.
