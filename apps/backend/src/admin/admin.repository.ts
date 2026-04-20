@@ -26,6 +26,14 @@
 import { prisma } from "../core/database/prisma";
 import { AdminListTenantsQuery, AdminToggleModuleInput } from "./admin.schema";
 
+const SAFE_SCHEMA_REGEX = /^[a-z_][a-z0-9_]*$/;
+
+function validateTenantSchemaForDrop(schemaName: string): void {
+  if (!SAFE_SCHEMA_REGEX.test(schemaName) || !schemaName.startsWith("tenant_")) {
+    throw new Error(`Schema inválido para exclusão: "${schemaName}"`);
+  }
+}
+
 // =============================================================================
 // INTERFACE: TenantWithModules
 // =============================================================================
@@ -238,6 +246,29 @@ export async function reactivateTenant(
   });
 
   return updated;
+}
+
+// =============================================================================
+// FUNÇÃO: deleteTenantWithSchema
+// =============================================================================
+// O QUE FAZ:
+//   Remove permanentemente o tenant e todos os seus dados:
+//   1) DROP SCHEMA ... CASCADE do schema isolado do tenant
+//   2) DELETE do registro em public.tenants
+//
+// IMPORTANTE:
+//   Operação irreversível. Deve ser chamada somente após confirmação no frontend.
+// =============================================================================
+export async function deleteTenantWithSchema(
+  tenantId: string,
+  schemaName: string,
+): Promise<void> {
+  validateTenantSchemaForDrop(schemaName);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+    await tx.tenant.delete({ where: { id: tenantId } });
+  });
 }
 
 // =============================================================================

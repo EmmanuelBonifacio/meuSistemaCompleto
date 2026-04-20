@@ -7,6 +7,7 @@
 //   - Listar tenants com status, slug, data de criação e módulos ativos
 //   - Expandir linha para ver/gerenciar módulos via ModuleToggle
 //   - Suspender/reativar tenant
+//   - Excluir tenant de forma permanente (com confirmação)
 //   - Criar novo tenant via TenantForm modal
 // =============================================================================
 
@@ -18,6 +19,7 @@ import {
   RefreshCw,
   ShieldOff,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,7 @@ import {
   listTenants,
   suspendTenant,
   reactivateTenant,
+  deleteTenant,
 } from "@/services/admin.service";
 import { formatDate } from "@/lib/utils";
 import type { Tenant } from "@/types/api";
@@ -40,6 +43,8 @@ export function TenantTable() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   // id do tenant aguardando confirmação de suspend/reactivate
   const [confirmStatusId, setConfirmStatusId] = useState<string | null>(null);
+  // id do tenant aguardando confirmação de exclusão
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Modal de criação
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -77,6 +82,7 @@ export function TenantTable() {
     // Primeiro clique: pede confirmação visual (sem window.confirm)
     if (confirmStatusId !== tenant.id) {
       setConfirmStatusId(tenant.id);
+      setConfirmDeleteId(null);
       setTimeout(() => setConfirmStatusId(null), 4000);
       return;
     }
@@ -93,6 +99,25 @@ export function TenantTable() {
       loadTenants();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao alterar status.");
+    }
+  }
+
+  async function handleDeleteTenant(tenant: Tenant) {
+    // Primeiro clique: pede confirmação visual (sem window.confirm)
+    if (confirmDeleteId !== tenant.id) {
+      setConfirmDeleteId(tenant.id);
+      setConfirmStatusId(null);
+      setTimeout(() => setConfirmDeleteId(null), 4000);
+      return;
+    }
+    // Segundo clique: executa
+    setConfirmDeleteId(null);
+    try {
+      await deleteTenant(tenant.id);
+      setSuccessMsg(`Tenant "${tenant.name}" excluído.`);
+      loadTenants();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao excluir tenant.");
     }
   }
 
@@ -257,31 +282,58 @@ export function TenantTable() {
                                 Cancelar
                               </Button>
                             </div>
+                          ) : confirmDeleteId === tenant.id ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteTenant(tenant)}
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" /> Confirmar
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
                           ) : (
-                            <Button
-                              variant={
-                                tenant.isActive ? "outline" : "secondary"
-                              }
-                              size="sm"
-                              onClick={() => handleToggleStatus(tenant)}
-                              className={
-                                tenant.isActive
-                                  ? "text-destructive hover:text-destructive/80"
-                                  : ""
-                              }
-                            >
-                              {tenant.isActive ? (
-                                <>
-                                  <ShieldOff className="mr-1 h-3 w-3" />{" "}
-                                  Suspender
-                                </>
-                              ) : (
-                                <>
-                                  <ShieldCheck className="mr-1 h-3 w-3" />{" "}
-                                  Reativar
-                                </>
-                              )}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant={
+                                  tenant.isActive ? "outline" : "secondary"
+                                }
+                                size="sm"
+                                onClick={() => handleToggleStatus(tenant)}
+                                className={
+                                  tenant.isActive
+                                    ? "text-destructive hover:text-destructive/80"
+                                    : ""
+                                }
+                              >
+                                {tenant.isActive ? (
+                                  <>
+                                    <ShieldOff className="mr-1 h-3 w-3" />{" "}
+                                    Suspender
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShieldCheck className="mr-1 h-3 w-3" />{" "}
+                                    Reativar
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteTenant(tenant)}
+                                className="text-destructive hover:text-destructive/80"
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" /> Excluir
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </td>

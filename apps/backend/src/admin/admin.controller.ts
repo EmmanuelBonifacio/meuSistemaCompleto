@@ -25,6 +25,7 @@ import {
   findTenantByIdAdmin,
   suspendTenant,
   reactivateTenant,
+  deleteTenantWithSchema,
   toggleTenantModule,
   getSystemStats,
 } from "./admin.repository";
@@ -256,6 +257,41 @@ export async function reactivateTenantHandler(
       isActive: result.isActive,
       updatedAt: result.updatedAt,
     },
+  });
+}
+
+// =============================================================================
+// HANDLER: deleteTenantHandler
+// =============================================================================
+// ROTA: DELETE /admin/tenants/:id
+// O QUE FAZ:
+//   Exclui permanentemente um tenant e seu schema PostgreSQL.
+//   Operação irreversível: remove produtos, usuários, pedidos e demais dados.
+// =============================================================================
+export async function deleteTenantHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const { id } = AdminTenantParamsSchema.parse(request.params);
+  const tenant = await findTenantByIdAdmin(id);
+
+  if (!tenant) {
+    return reply.status(404).send({
+      statusCode: 404,
+      error: "Não Encontrado",
+      message: `Tenant com ID "${id}" não encontrado.`,
+    });
+  }
+
+  await deleteTenantWithSchema(id, tenant.schemaName);
+
+  request.log.warn(
+    `[Admin] 🗑️ Tenant "${tenant.name}" (${tenant.slug}) EXCLUÍDO por admin: ${request.user.sub}`,
+  );
+
+  return reply.status(200).send({
+    mensagem: `Tenant "${tenant.name}" excluído com sucesso.`,
+    aviso: "Todos os dados do tenant foram removidos permanentemente.",
   });
 }
 

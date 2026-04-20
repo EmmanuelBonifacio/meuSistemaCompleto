@@ -542,6 +542,7 @@ async function start() {
     console.log(
       `   PATCH  /admin/tenants/:id/modules       → Ligar/desligar módulo`,
     );
+    console.log(`   DELETE /admin/tenants/:id               → Excluir tenant`);
     console.log(`\n   --- MÓDULO: TV / DIGITAL SIGNAGE ---`);
     console.log(
       `   GET    /tv/devices                    → Listar TVs do tenant`,

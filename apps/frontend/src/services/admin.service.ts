@@ -12,6 +12,7 @@
 //   POST   /admin/tenants                                        → createTenant()
 //   PATCH  /admin/tenants/:id/suspend                            → suspendTenant()
 //   PATCH  /admin/tenants/:id/reactivate                         → reactivateTenant()
+//   DELETE /admin/tenants/:id                                    → deleteTenant()
 //   PATCH  /admin/tenants/:id/modules                            → toggleModule()
 //   GET    /admin/tenants/:id/logs                               → getTenantLogs()
 //   GET    /admin/tenants/:id/users                              → listTenantUsers()
@@ -123,6 +124,16 @@ export async function reactivateTenant(
   const response = await api.patch<{ mensagem: string }>(
     `/admin/tenants/${id}/reactivate`,
   );
+  return response.data;
+}
+
+// =============================================================================
+// FUNÇÃO: deleteTenant
+// =============================================================================
+// Exclui permanentemente um tenant e todos os dados vinculados.
+// =============================================================================
+export async function deleteTenant(id: string): Promise<{ mensagem: string }> {
+  const response = await api.delete<{ mensagem: string }>(`/admin/tenants/${id}`);
   return response.data;
 }
 

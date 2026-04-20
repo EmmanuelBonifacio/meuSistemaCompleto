@@ -22,6 +22,7 @@
 //   POST   /admin/tenants                       → Criar + provisionar novo tenant
 //   PATCH  /admin/tenants/:id/suspend           → Suspender tenant (acesso bloqueado)
 //   PATCH  /admin/tenants/:id/reactivate        → Reativar tenant suspenso
+//   DELETE /admin/tenants/:id                   → Excluir tenant permanentemente
 //   PATCH  /admin/tenants/:id/modules           → Ligar/desligar módulo de um tenant
 // =============================================================================
 
@@ -33,6 +34,7 @@ import {
   createTenant,
   suspendTenantHandler,
   reactivateTenantHandler,
+  deleteTenantHandler,
   toggleModuleHandler,
   getStatsHandler,
   getTenantLogsHandler,
@@ -120,6 +122,14 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
   // Acesso restaurado imediatamente.
   // ==========================================================================
   fastify.patch("/tenants/:id/reactivate", reactivateTenantHandler);
+
+  // ==========================================================================
+  // ROTA: DELETE /admin/tenants/:id
+  // ==========================================================================
+  // Exclui definitivamente o tenant e todos os seus dados (schema + metadados).
+  // Requer confirmação no frontend, pois é uma ação irreversível.
+  // ==========================================================================
+  fastify.delete("/tenants/:id", deleteTenantHandler);
 
   // ==========================================================================
   // ROTA: PATCH /admin/tenants/:id/modules
