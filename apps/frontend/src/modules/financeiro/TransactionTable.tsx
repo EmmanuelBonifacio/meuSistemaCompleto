@@ -237,6 +237,12 @@ export function TransactionTable() {
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">
                     Categoria
                   </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">
+                    Fornecedor
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden xl:table-cell">
+                    Centro custo
+                  </th>
                   <th className="px-4 py-3 text-right font-medium text-muted-foreground">
                     Valor
                   </th>
@@ -279,7 +285,7 @@ export function TransactionTable() {
                   (!data?.transactions || data.transactions.length === 0) && (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={8}
                         className="px-4 py-12 text-center text-muted-foreground"
                       >
                         <TrendingUp className="mx-auto mb-3 h-8 w-8 opacity-30" />
@@ -325,6 +331,12 @@ export function TransactionTable() {
                       {/* Categoria */}
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                         {tx.category ?? <span className="text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
+                        {tx.supplier ?? <span className="text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell">
+                        {tx.costCenter ?? <span className="text-xs">—</span>}
                       </td>
 
                       {/* Valor colorido pelo tipo */}

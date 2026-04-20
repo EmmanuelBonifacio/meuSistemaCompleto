@@ -7,12 +7,12 @@
 // =============================================================================
 
 import type { Metadata } from "next";
-import { TransactionTable } from "@/modules/financeiro/TransactionTable";
+import { FinanceiroWorkspace } from "@/modules/financeiro/FinanceiroWorkspace";
 
 export const metadata: Metadata = {
   title: "Financeiro",
 };
 
 export default function FinanceiroPage() {
-  return <TransactionTable />;
+  return <FinanceiroWorkspace />;
 }

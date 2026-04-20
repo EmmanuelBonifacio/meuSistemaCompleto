@@ -95,6 +95,8 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
                        CONSTRAINT transactions_amount_positive CHECK (amount > 0),
       description      TEXT        NOT NULL,
       category         VARCHAR(100),
+      supplier         VARCHAR(150),
+      cost_center      VARCHAR(100),
       transaction_date DATE        NOT NULL DEFAULT CURRENT_DATE,
       is_reconciled    BOOLEAN     NOT NULL DEFAULT false,
       -- is_reconciled: indica se a transação foi conferida no extrato bancário
@@ -111,6 +113,103 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
       ON "${schemaName}".transactions (transaction_date DESC)`,
 
     // -----------------------------------------------------------------
+    // TABELA: financial_commitments (Planejamento Financeiro)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".financial_commitments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      title VARCHAR(200) NOT NULL,
+      description TEXT,
+      category VARCHAR(100),
+      supplier VARCHAR(150),
+      cost_center VARCHAR(100),
+      type VARCHAR(30) NOT NULL
+        CONSTRAINT financial_commitments_type_check
+        CHECK (type IN ('conta_fixa_mensal','assinatura_mensal','parcelamento')),
+      direction VARCHAR(20) NOT NULL DEFAULT 'despesa'
+        CONSTRAINT financial_commitments_direction_check
+        CHECK (direction IN ('receita','despesa')),
+      amount DECIMAL(12,2) NOT NULL
+        CONSTRAINT financial_commitments_amount_positive CHECK (amount > 0),
+      start_date DATE NOT NULL,
+      end_date DATE,
+      due_day INTEGER NOT NULL
+        CONSTRAINT financial_commitments_due_day_check CHECK (due_day BETWEEN 1 AND 31),
+      installment_count INTEGER
+        CONSTRAINT financial_commitments_installment_count_check CHECK (installment_count IS NULL OR installment_count >= 2),
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
+    // -----------------------------------------------------------------
+    // TABELA: financial_occurrences (competências previstas/pagas)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".financial_occurrences (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      commitment_id UUID NOT NULL
+        REFERENCES "${schemaName}".financial_commitments(id) ON DELETE CASCADE,
+      competence_month DATE NOT NULL,
+      due_date DATE NOT NULL,
+      installment_number INTEGER NOT NULL DEFAULT 0,
+      expected_amount DECIMAL(12,2) NOT NULL
+        CONSTRAINT financial_occurrences_expected_amount_positive CHECK (expected_amount > 0),
+      status VARCHAR(20) NOT NULL DEFAULT 'pendente'
+        CONSTRAINT financial_occurrences_status_check
+        CHECK (status IN ('pendente','pago','atrasado','cancelado')),
+      paid_amount DECIMAL(12,2),
+      paid_at DATE,
+      transaction_id UUID,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT financial_occurrences_unique UNIQUE (commitment_id, competence_month, installment_number)
+    )`,
+
+    `CREATE INDEX IF NOT EXISTS idx_financial_occurrences_due_date
+      ON "${schemaName}".financial_occurrences (due_date)`,
+
+    `CREATE INDEX IF NOT EXISTS idx_financial_occurrences_status
+      ON "${schemaName}".financial_occurrences (status)`,
+
+    // -----------------------------------------------------------------
+    // TABELA: financial_payments (baixas efetivas)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".financial_payments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      occurrence_id UUID NOT NULL UNIQUE
+        REFERENCES "${schemaName}".financial_occurrences(id) ON DELETE CASCADE,
+      paid_amount DECIMAL(12,2) NOT NULL
+        CONSTRAINT financial_payments_paid_amount_positive CHECK (paid_amount > 0),
+      penalty_amount DECIMAL(12,2) NOT NULL DEFAULT 0
+        CONSTRAINT financial_payments_penalty_non_negative CHECK (penalty_amount >= 0),
+      interest_amount DECIMAL(12,2) NOT NULL DEFAULT 0
+        CONSTRAINT financial_payments_interest_non_negative CHECK (interest_amount >= 0),
+      discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0
+        CONSTRAINT financial_payments_discount_non_negative CHECK (discount_amount >= 0),
+      payment_date DATE NOT NULL,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
+    // -----------------------------------------------------------------
+    // TABELA: financial_monthly_history (snapshot por mês)
+    // -----------------------------------------------------------------
+    `CREATE TABLE IF NOT EXISTS "${schemaName}".financial_monthly_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      month DATE NOT NULL UNIQUE,
+      previsto DECIMAL(14,2) NOT NULL DEFAULT 0,
+      pago DECIMAL(14,2) NOT NULL DEFAULT 0,
+      pendente DECIMAL(14,2) NOT NULL DEFAULT 0,
+      atrasado DECIMAL(14,2) NOT NULL DEFAULT 0,
+      realizado_receitas DECIMAL(14,2) NOT NULL DEFAULT 0,
+      realizado_despesas DECIMAL(14,2) NOT NULL DEFAULT 0,
+      saldo_realizado DECIMAL(14,2) NOT NULL DEFAULT 0,
+      generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
+    `CREATE INDEX IF NOT EXISTS idx_financial_monthly_history_month
+      ON "${schemaName}".financial_monthly_history (month DESC)`,
+
+    // -----------------------------------------------------------------
     // TABELA: tv_devices (Módulo de Controle de Telas / Digital Signage)
     // -----------------------------------------------------------------
     // Armazena os dispositivos (Smart TVs, monitores) registrados pelo
@@ -123,13 +222,13 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     //   É enforçada no tv.repository.ts antes do INSERT.
     //
     // CAMPOS:
-    //   ip_address    → IPv4 ou IPv6 da TV na rede local (deve ser único
+    //   ip_address    -> IPv4 ou IPv6 da TV na rede local (deve ser único
     //                   por tenant, pois dois dispositivos não podem ter
     //                   o mesmo IP na mesma rede)
-    //   mac_address   → Endereço físico da placa de rede (para Wake-on-LAN)
-    //   status        → 'online' (respondendo a pings) | 'offline' (sem resposta)
-    //   current_content → última URL que foi enviada para a tela
-    //   last_seen_at  → timestamp da última resposta bem-sucedida ao enviar
+    //   mac_address   -> Endereço físico da placa de rede (para Wake-on-LAN)
+    //   status        -> 'online' (respondendo a pings) | 'offline' (sem resposta)
+    //   current_content -> última URL que foi enviada para a tela
+    //   last_seen_at  -> timestamp da última resposta bem-sucedida ao enviar
     //                   um comando (atualizado automaticamente em POST /tv/control)
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".tv_devices (
@@ -225,14 +324,14 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     //   desnormalizada para não precisar fazer JOIN após a remoção.
     //
     // CAMPOS:
-    //   device_id     → UUID do dispositivo (sem FK — desacoplado do ciclo de vida da TV)
-    //   device_name   → nome da TV no momento do envio (para exibição histórica)
-    //   content_url   → URL enviada para a tela
-    //   content_type  → 'video' | 'image' | 'web'
-    //   protocol_used → 'upnp' | 'dial' | 'none' (qual protocolo foi usado)
-    //   success       → true se a TV respondeu ao comando, false se não respondeu
-    //   error_message → detalhe do erro quando success=false (para diagnóstico)
-    //   sent_at       → timestamp exato do envio
+    //   device_id     -> UUID do dispositivo (sem FK — desacoplado do ciclo de vida da TV)
+    //   device_name   -> nome da TV no momento do envio (para exibição histórica)
+    //   content_url   -> URL enviada para a tela
+    //   content_type  -> 'video' | 'image' | 'web'
+    //   protocol_used -> 'upnp' | 'dial' | 'none' (qual protocolo foi usado)
+    //   success       -> true se a TV respondeu ao comando, false se não respondeu
+    //   error_message -> detalhe do erro quando success=false (para diagnóstico)
+    //   sent_at       -> timestamp exato do envio
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".tv_command_logs (
       id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -243,11 +342,11 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
                     CONSTRAINT tv_command_logs_type_check
                     CHECK (content_type IN ('video', 'image', 'web', 'timer', 'screen-share')),
       -- protocol_used expandido para cobrir todos os protocolos do waterfall:
-      --   'websocket'   → enviado via Socket.IO ao receiver.html na TV
-      --   'chromecast'  → enviado via Cast REST API
-      --   'upnp'        → enviado via SOAP AVTransport
-      --   'dial'        → enviado via DIAL HTTP POST
-      --   'none'        → todos os protocolos falharam
+      --   'websocket'   -> enviado via Socket.IO ao receiver.html na TV
+      --   'chromecast'  -> enviado via Cast REST API
+      --   'upnp'        -> enviado via SOAP AVTransport
+      --   'dial'        -> enviado via DIAL HTTP POST
+      --   'none'        -> todos os protocolos falharam
       protocol_used VARCHAR(20)
                     CONSTRAINT tv_command_logs_protocol_check
                     CHECK (protocol_used IN ('websocket','chromecast','upnp','dial','none') OR protocol_used IS NULL),
@@ -272,12 +371,12 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     //   em disco (ou S3/MinIO) e registrar apenas a URL no banco.
     //
     // CAMPOS:
-    //   filename      → nome único no disco (UUID + extensão) — evita colisões
-    //   original_name → nome original do arquivo (para exibição ao usuário)
-    //   url           → URL pública para acesso: /uploads/{tenantSlug}/{filename}
-    //   mime_type     → tipo MIME validado no upload (ex: video/mp4, image/jpeg)
-    //   size_bytes    → tamanho em bytes (para exibir ao usuário e limitar storage)
-    //   uploaded_by   → UUID do usuário que fez o upload (auditoria)
+    //   filename      -> nome único no disco (UUID + extensão) — evita colisões
+    //   original_name -> nome original do arquivo (para exibição ao usuário)
+    //   url           -> URL pública para acesso: /uploads/{tenantSlug}/{filename}
+    //   mime_type     -> tipo MIME validado no upload (ex: video/mp4, image/jpeg)
+    //   size_bytes    -> tamanho em bytes (para exibir ao usuário e limitar storage)
+    //   uploaded_by   -> UUID do usuário que fez o upload (auditoria)
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".media_files (
       id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -302,14 +401,14 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // isolada dos outros tenants (schema-per-tenant).
     //
     // CAMPOS:
-    //   email         → identificador de login (único por tenant)
-    //   password_hash → NUNCA guardar senha em texto puro. Aqui fica
+    //   email         -> identificador de login (único por tenant)
+    //   password_hash -> NUNCA guardar senha em texto puro. Aqui fica
     //                   o hash bcrypt (custo 12) da senha do usuário.
-    //   name          → nome exibido na interface
-    //   role          → papel do usuário dentro do tenant:
+    //   name          -> nome exibido na interface
+    //   role          -> papel do usuário dentro do tenant:
     //                   'admin_tenant' = administrador do tenant
     //                   'user'         = usuário comum
-    //   is_active     → permite desativar um usuário sem deletar seus dados
+    //   is_active     -> permite desativar um usuário sem deletar seus dados
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".users (
       id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -350,11 +449,11 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     //   possível roubo e podemos revogar TODA a família de tokens.
     //
     // CAMPOS:
-    //   token_hash    → SHA-256 do refresh token (não o token em si)
-    //   expires_at    → timestamp de expiração (geralmente 30 dias)
-    //   is_revoked    → true se o token foi usado (rotação) ou invalidado (logout)
-    //   ip_address    → IP da requisição de login (auditoria)
-    //   user_agent    → browser/app usado no login (auditoria)
+    //   token_hash    -> SHA-256 do refresh token (não o token em si)
+    //   expires_at    -> timestamp de expiração (geralmente 30 dias)
+    //   is_revoked    -> true se o token foi usado (rotação) ou invalidado (logout)
+    //   ip_address    -> IP da requisição de login (auditoria)
+    //   user_agent    -> browser/app usado no login (auditoria)
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".refresh_tokens (
       id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -386,15 +485,15 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     // Cada tenant tem seu próprio catálogo, isolado no seu schema.
     //
     // CAMPOS:
-    //   nome             → nome do produto exibido no catálogo
-    //   descricao        → texto descritivo do produto
-    //   preco            → preço original
-    //   preco_promocional→ preço com desconto (opcional — exibido em "Promoções")
-    //   categoria        → fileira onde o produto aparece (ex: lancamentos, mais-vendidos)
-    //   foto_url         → URL pública da imagem do produto
-    //   ativo            → controla se aparece no catálogo público (false = oculto)
-    //   destaque         → exibe em destaque dentro da categoria (topo da fileira)
-    //   ordem            → posição na fileira (menor valor = mais à esquerda)
+    //   nome             -> nome do produto exibido no catálogo
+    //   descricao        -> texto descritivo do produto
+    //   preco            -> preço original
+    //   preco_promocional-> preço com desconto (opcional — exibido em "Promoções")
+    //   categoria        -> fileira onde o produto aparece (ex: lancamentos, mais-vendidos)
+    //   foto_url         -> URL pública da imagem do produto
+    //   ativo            -> controla se aparece no catálogo público (false = oculto)
+    //   destaque         -> exibe em destaque dentro da categoria (topo da fileira)
+    //   ordem            -> posição na fileira (menor valor = mais à esquerda)
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".venda_produtos (
       id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -436,11 +535,11 @@ function buildTenantSchemaSQL(schemaName: string): string[] {
     //   JSONB garante esse snapshot sem precisar de outra tabela.
     //
     // CAMPOS:
-    //   numero_whatsapp → telefone do comprador (pode ser null se não capturado)
-    //   itens_json      → snapshot do carrinho: [{produto_id, nome, preco, quantidade}]
-    //   total           → valor total do pedido no momento da compra
-    //   status          → ciclo de vida: pendente → pago → enviado → finalizado
-    //   notas           → observações do admin (ex: "Entregue em 12/04", "Pix recebido")
+    //   numero_whatsapp -> telefone do comprador (pode ser null se não capturado)
+    //   itens_json      -> snapshot do carrinho: [{produto_id, nome, preco, quantidade}]
+    //   total           -> valor total do pedido no momento da compra
+    //   status          -> ciclo de vida: pendente -> pago -> enviado -> finalizado
+    //   notas           -> observações do admin (ex: "Entregue em 12/04", "Pix recebido")
     // -----------------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS "${schemaName}".venda_pedidos (
       id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),

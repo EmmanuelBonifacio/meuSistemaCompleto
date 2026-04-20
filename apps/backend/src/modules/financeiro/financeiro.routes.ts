@@ -44,4 +44,70 @@ export async function financeiroRoutes(fastify: FastifyInstance) {
     preHandler: moduleGuard,
     handler: financeiroController.deleteTransaction,
   });
+
+  // GET /financeiro/compromissos
+  fastify.get("/compromissos", {
+    preHandler: moduleGuard,
+    handler: financeiroController.listCommitments,
+  });
+
+  // POST /financeiro/compromissos
+  fastify.post("/compromissos", {
+    preHandler: moduleGuard,
+    handler: financeiroController.createCommitment,
+  });
+
+  // PATCH /financeiro/compromissos/:id
+  fastify.patch<{ Params: { id: string } }>("/compromissos/:id", {
+    preHandler: moduleGuard,
+    handler: financeiroController.updateCommitment,
+  });
+
+  // DELETE /financeiro/compromissos/:id
+  fastify.delete<{ Params: { id: string } }>("/compromissos/:id", {
+    preHandler: moduleGuard,
+    handler: financeiroController.deleteCommitment,
+  });
+
+  // GET /financeiro/projecao
+  fastify.get("/projecao", {
+    preHandler: moduleGuard,
+    handler: financeiroController.getProjection,
+  });
+
+  // GET /financeiro/dashboard
+  fastify.get("/dashboard", {
+    preHandler: moduleGuard,
+    handler: financeiroController.getDashboard,
+  });
+
+  // POST /financeiro/ocorrencias/:id/baixar
+  fastify.post<{ Params: { id: string } }>("/ocorrencias/:id/baixar", {
+    preHandler: moduleGuard,
+    handler: financeiroController.settleOccurrence,
+  });
+
+  // POST /financeiro/importacoes/extrato-csv
+  fastify.post("/importacoes/extrato-csv", {
+    preHandler: moduleGuard,
+    handler: financeiroController.importBankCsv,
+  });
+
+  // POST /financeiro/historico/snapshot
+  fastify.post("/historico/snapshot", {
+    preHandler: moduleGuard,
+    handler: financeiroController.snapshotMonthlyHistory,
+  });
+
+  // GET /financeiro/historico
+  fastify.get("/historico", {
+    preHandler: moduleGuard,
+    handler: financeiroController.listMonthlyHistory,
+  });
+
+  // GET /financeiro/relatorios/mensal
+  fastify.get("/relatorios/mensal", {
+    preHandler: moduleGuard,
+    handler: financeiroController.getMonthlyReport,
+  });
 }

@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { LayoutDashboard, Building2, LogOut, Shield } from "lucide-react";
+import { LayoutDashboard, Building2, Bot, LogOut, Shield } from "lucide-react";
 import { ADMIN_TOKEN_KEY } from "@/services/api";
 import { isJwtExpired, decodeJwt } from "@/lib/utils";
 import { logout, adminLogout } from "@/services/auth.service";
@@ -21,6 +21,7 @@ import type { JwtPayload } from "@/types/api";
 const NAV_ITEMS = [
   { href: "/admin", label: "Visão Geral", icon: LayoutDashboard, exact: true },
   { href: "/admin/tenants", label: "Tenants", icon: Building2, exact: false },
+  { href: "/admin/ia", label: "IA", icon: Bot, exact: false },
 ];
 
 export default function AdminLayout({

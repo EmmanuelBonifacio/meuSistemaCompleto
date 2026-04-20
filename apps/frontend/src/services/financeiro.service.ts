@@ -19,7 +19,17 @@ import type {
   TransacaoInput,
   TransactionType,
   FinanceiroSummaryData,
+  FinancialCommitment,
+  FinancialCommitmentInput,
+  FinancialCommitmentListResponse,
+  FinancialProjectionResponse,
+  SettleOccurrenceInput,
+  FinancialDashboardResponse,
+  ImportBankCsvResult,
+  FinancialMonthlyHistoryItem,
+  FinancialMonthlyHistoryListResponse,
 } from "@/types/api";
+import { TOKEN_KEY } from "./api";
 
 // Filtros disponíveis para a listagem de transações
 export interface ListTransactionsParams {
@@ -27,6 +37,8 @@ export interface ListTransactionsParams {
   limit?: number;
   type?: TransactionType;
   category?: string;
+  supplier?: string;
+  costCenter?: string;
   search?: string; // busca por descrição/categoria
   startDate?: string; // YYYY-MM-DD
   endDate?: string; // YYYY-MM-DD
@@ -49,6 +61,8 @@ export async function listTransactions(
         limit: params.limit ?? 20,
         type: params.type,
         category: params.category,
+        supplier: params.supplier,
+        costCenter: params.costCenter,
         search: params.search,
         startDate: params.startDate,
         endDate: params.endDate,
@@ -120,4 +134,178 @@ export async function getFinanceiroSummary(): Promise<FinanceiroSummaryData> {
   }
   // Fallback: calcula localmente caso o backend não retorne resumo
   return { totalReceitas: 0, totalDespesas: 0, saldo: 0 };
+}
+
+export interface ListCommitmentsParams {
+  page?: number;
+  limit?: number;
+  type?: "conta_fixa_mensal" | "assinatura_mensal" | "parcelamento";
+  isActive?: boolean;
+  supplier?: string;
+  costCenter?: string;
+}
+
+export async function listCommitments(
+  params: ListCommitmentsParams = {},
+): Promise<FinancialCommitmentListResponse> {
+  const response = await api.get<FinancialCommitmentListResponse>(
+    "/financeiro/compromissos",
+    {
+      params: {
+        page: params.page ?? 1,
+        limit: params.limit ?? 20,
+        type: params.type,
+        isActive: params.isActive,
+        supplier: params.supplier,
+        costCenter: params.costCenter,
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function createCommitment(
+  data: FinancialCommitmentInput,
+): Promise<FinancialCommitment> {
+  const response = await api.post<FinancialCommitment>(
+    "/financeiro/compromissos",
+    data,
+  );
+  return response.data;
+}
+
+export async function updateCommitment(
+  id: string,
+  data: Partial<FinancialCommitmentInput>,
+): Promise<FinancialCommitment> {
+  const response = await api.patch<FinancialCommitment>(
+    `/financeiro/compromissos/${id}`,
+    data,
+  );
+  return response.data;
+}
+
+export async function deleteCommitment(id: string): Promise<void> {
+  await api.delete(`/financeiro/compromissos/${id}`);
+}
+
+export async function getFinancialProjection(params?: {
+  fromMonth?: string;
+  toMonth?: string;
+  status?: "pendente" | "pago" | "atrasado" | "cancelado";
+  type?: "conta_fixa_mensal" | "assinatura_mensal" | "parcelamento";
+  supplier?: string;
+  costCenter?: string;
+}): Promise<FinancialProjectionResponse> {
+  const response = await api.get<FinancialProjectionResponse>(
+    "/financeiro/projecao",
+    { params },
+  );
+  return response.data;
+}
+
+export async function settleOccurrence(
+  id: string,
+  data: SettleOccurrenceInput = {},
+) {
+  const response = await api.post(`/financeiro/ocorrencias/${id}/baixar`, data);
+  return response.data;
+}
+
+export async function getFinancialDashboard(months = 6) {
+  const response = await api.get<FinancialDashboardResponse>(
+    "/financeiro/dashboard",
+    {
+      params: { months },
+    },
+  );
+  return response.data;
+}
+
+export async function importBankCsv(
+  file: File,
+  options?: {
+    defaultType?: "receita" | "despesa";
+    useAiCategorization?: boolean;
+    skipDuplicates?: boolean;
+  },
+): Promise<ImportBankCsvResult> {
+  const form = new FormData();
+  form.append("file", file);
+  if (options?.defaultType) form.append("defaultType", options.defaultType);
+  if (options?.useAiCategorization !== undefined) {
+    form.append("useAiCategorization", String(options.useAiCategorization));
+  }
+  if (options?.skipDuplicates !== undefined) {
+    form.append("skipDuplicates", String(options.skipDuplicates));
+  }
+
+  const response = await api.post<ImportBankCsvResult>(
+    "/financeiro/importacoes/extrato-csv",
+    form,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return response.data;
+}
+
+export async function snapshotMonthlyHistory(month?: string) {
+  const response = await api.post<FinancialMonthlyHistoryItem>(
+    "/financeiro/historico/snapshot",
+    month ? { month } : {},
+  );
+  return response.data;
+}
+
+export async function listMonthlyHistory(params?: {
+  page?: number;
+  limit?: number;
+  fromMonth?: string;
+  toMonth?: string;
+}) {
+  const response = await api.get<FinancialMonthlyHistoryListResponse>(
+    "/financeiro/historico",
+    { params },
+  );
+  return response.data;
+}
+
+export async function getMonthlyReport(params?: {
+  fromMonth?: string;
+  toMonth?: string;
+}) {
+  const response = await api.get<{ data: FinancialMonthlyHistoryItem[]; total: number }>(
+    "/financeiro/relatorios/mensal",
+    {
+      params: { ...params, format: "json" },
+    },
+  );
+  return response.data;
+}
+
+export async function downloadMonthlyReportCsv(params?: {
+  fromMonth?: string;
+  toMonth?: string;
+}) {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+  const query = new URLSearchParams({
+    format: "csv",
+    ...(params?.fromMonth ? { fromMonth: params.fromMonth } : {}),
+    ...(params?.toMonth ? { toMonth: params.toMonth } : {}),
+  });
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+
+  const response = await fetch(
+    `${baseUrl}/financeiro/relatorios/mensal?${query.toString()}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      credentials: "include",
+    },
+  );
+  if (!response.ok) {
+    throw new Error("Falha ao gerar relatório CSV.");
+  }
+  return response.text();
 }

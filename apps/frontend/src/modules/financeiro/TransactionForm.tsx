@@ -68,6 +68,8 @@ export function TransactionForm({
         amount: transaction.amount,
         description: transaction.description,
         category: transaction.category ?? "",
+        supplier: transaction.supplier ?? "",
+        costCenter: transaction.costCenter ?? "",
         transactionDate: transaction.transactionDate.slice(0, 10),
       });
     } else {
@@ -101,6 +103,8 @@ export function TransactionForm({
       amount: Number(form.amount),
       description: form.description.trim(),
       ...(form.category?.trim() && { category: form.category.trim() }),
+      ...(form.supplier?.trim() && { supplier: form.supplier.trim() }),
+      ...(form.costCenter?.trim() && { costCenter: form.costCenter.trim() }),
       transactionDate: form.transactionDate,
     };
 
@@ -226,6 +230,33 @@ export function TransactionForm({
               value={form.category ?? ""}
               onChange={(e) => handleChange("category", e.target.value)}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-supplier">
+                Fornecedor{" "}
+                <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                id="tx-supplier"
+                placeholder="Ex: Banco X, Mercado Y"
+                value={form.supplier ?? ""}
+                onChange={(e) => handleChange("supplier", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-cost-center">
+                Centro de custo{" "}
+                <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <Input
+                id="tx-cost-center"
+                placeholder="Ex: Administrativo"
+                value={form.costCenter ?? ""}
+                onChange={(e) => handleChange("costCenter", e.target.value)}
+              />
+            </div>
           </div>
 
           <DialogFooter>

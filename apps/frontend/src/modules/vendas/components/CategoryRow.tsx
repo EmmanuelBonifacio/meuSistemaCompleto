@@ -22,7 +22,10 @@ interface CategoryRowProps {
   categoria: string;
   produtos: ProdutoVenda[];
   whatsappNumber: string;
-  onAdicionarCarrinho: (item: Omit<ItemCarrinho, "quantidade">) => void;
+  onAdicionarCarrinho: (
+    item: Omit<ItemCarrinho, "quantidade">,
+    quantidade?: number,
+  ) => void;
   corPrimaria?: string;
   corClara?: string;
 }

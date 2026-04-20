@@ -16,7 +16,7 @@
 
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { X, Trash2, ShoppingBag, MessageCircle } from "lucide-react";
 import Image from "next/image";
 import type { ItemCarrinho } from "@/types/vendas.types";
@@ -63,6 +63,9 @@ export function CartDrawer({
   corPrimaria = "#4f46e5",
 }: CartDrawerProps) {
   const [isPending, startTransition] = useTransition();
+  const [imagensInvalidas, setImagensInvalidas] = useState<
+    Record<string, boolean>
+  >({});
 
   const formatarMoeda = (valor: number) =>
     valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -144,24 +147,42 @@ export function CartDrawer({
               </p>
             </div>
           ) : (
-            itens.map((item) => (
-              <div
-                key={item.produto_id}
-                className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
-              >
+            itens.map((item) => {
+              const fotoUrl = imagensInvalidas[item.produto_id]
+                ? null
+                : resolveImageUrl(item.foto_url);
+
+              return (
+                <div
+                  key={item.produto_id}
+                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
+                >
                 {/* Foto do item — corrige URLs relativas */}
                 <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                  {item.foto_url ? (
+                  {fotoUrl ? (
                     <Image
-                      src={resolveImageUrl(item.foto_url)!}
+                      src={fotoUrl}
                       alt={item.nome}
                       fill
                       className="object-cover"
                       sizes="64px"
                       unoptimized
+                      onError={() =>
+                        setImagensInvalidas((prev) => ({
+                          ...prev,
+                          [item.produto_id]: true,
+                        }))
+                      }
                     />
                   ) : (
-                    <ShoppingBag className="w-8 h-8 text-gray-300 m-auto mt-4" />
+                    <Image
+                      src="/images/sem-foto-produto.svg"
+                      alt="Produto sem foto"
+                      fill
+                      className="object-cover"
+                      sizes="64px"
+                      unoptimized
+                    />
                   )}
                 </div>
 
@@ -220,8 +241,9 @@ export function CartDrawer({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-              </div>
-            ))
+                </div>
+              );
+            })
           )}
         </div>
 

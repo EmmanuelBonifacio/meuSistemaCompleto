@@ -10,6 +10,69 @@ Projeto: SaaS Multitenant — Módulo TV + Xibo
 
 ---
 
+## ✅ NOVAS ALTERAÇÕES (20/04/2026) — FINANCEIRO + WHATSAPP
+
+## ✅ NOVAS ALTERAÇÕES (20/04/2026) — ESTABILIZAÇÃO FRONT + CATÁLOGO VENDAS
+
+### Catálogo de vendas (card do produto + carrinho)
+- Card de produto atualizado para selecionar quantidade no próprio card (mínimo 1 e máximo 99).
+- Botão **Comprar agora** passou a usar a quantidade selecionada ao gerar mensagem do WhatsApp.
+- Botão **Adicionar ao carrinho** passou a enviar a quantidade selecionada.
+- Carrinho com proteção de limite por item: máximo 99 unidades por produto.
+- Fallback de imagem melhorado:
+  - Novo arquivo: `apps/frontend/public/images/sem-foto-produto.svg`
+  - Usado no card e no drawer do carrinho quando faltar foto ou URL quebrar.
+
+### Correções técnicas para estabilidade
+- Backend (financeiro): corrigido erro de runtime
+  - `CreateCommitmentSchema.partial is not a function`
+  - Ajuste aplicado em `apps/backend/src/modules/financeiro/financeiro.schema.ts` com schema base reutilizável para create/update.
+- Frontend (admin IA): corrigido erro de tipo que quebrava build
+  - Arquivo: `apps/frontend/src/app/admin/ia/page.tsx`
+  - Ajuste em `getExecutionStatus(...)` para aceitar `Record<string, unknown>` sem cast inválido.
+
+### Observação operacional (desenvolvimento local)
+- Foi necessário limpar cache do Next (`.next`) e reiniciar o frontend em alguns ciclos por corrupção de chunks no hot reload.
+- Em caso de erro `Cannot find module './xxx.js'`, repetir:
+  1. parar frontend
+  2. apagar `apps/frontend/.next`
+  3. iniciar novamente
+
+---
+
+### Financeiro (segunda camada + histórico mensal)
+- Novo endpoint: `GET /financeiro/dashboard?months=6`
+- Novo endpoint: `POST /financeiro/importacoes/extrato-csv`
+- Novo endpoint: `POST /financeiro/historico/snapshot`
+- Novo endpoint: `GET /financeiro/historico`
+- Novo endpoint: `GET /financeiro/relatorios/mensal?format=json|csv`
+- Novas tabelas por tenant:
+  - `financial_commitments`
+  - `financial_occurrences`
+  - `financial_payments`
+  - `financial_monthly_history`
+- Novas colunas em `transactions`:
+  - `supplier`
+  - `cost_center`
+
+### Vendas/WhatsApp (correção do "�" e foto no pedido)
+- Símbolo de item alterado de caractere especial para ASCII:
+  - de `▶` para `-`
+- Mensagem enviada para o WhatsApp agora inclui link de foto do produto:
+  - `Foto: https://...`
+- Arquivo alterado:
+  - `apps/frontend/src/modules/vendas/lib/whatsapp.ts`
+
+### Variável nova recomendada para produção (WhatsApp imagem)
+```env
+NEXT_PUBLIC_WHATSAPP_MEDIA_BASE_URL="https://api.seudominio.com"
+```
+
+> Importante: se usar `localhost` no link de imagem, o WhatsApp não consegue
+> gerar preview para outros dispositivos.
+
+---
+
 ## ✅ O QUE FOI FEITO (resumo geral)
 
 - Módulo de TV expandido com sistema de planos (3, 5, 10 TVs ou Custom)

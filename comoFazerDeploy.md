@@ -83,6 +83,8 @@ Preencha com os dados reais de produção:
 - JWT_SECRET com uma string secreta longa
 - FRONTEND_URL com o domínio real (ex: https://app.seudominio.com)
 - XIBO_API_TOKEN_* para cada tenant
+- NEXT_PUBLIC_WHATSAPP_MEDIA_BASE_URL com a URL pública da API
+  (ex: https://api.seudominio.com) para previews de imagem no WhatsApp
 
 ### 7. Dar permissão de execução ao deploy.sh
 

@@ -14,6 +14,7 @@ import type { ItemCarrinho } from "@/types/vendas.types";
 
 // Chave usada no localStorage — prefixo evita colisão com outras libs
 const CART_STORAGE_KEY = "@saas/carrinho-vendas";
+const MAX_QUANTIDADE_POR_ITEM = 99;
 
 // =============================================================================
 // INTERFACE: Estado e ações exportadas pelo hook
@@ -22,7 +23,10 @@ export interface UseCartReturn {
   itens: ItemCarrinho[];
   totalItens: number;
   totalValor: number;
-  adicionarItem: (item: Omit<ItemCarrinho, "quantidade">) => void;
+  adicionarItem: (
+    item: Omit<ItemCarrinho, "quantidade">,
+    quantidade?: number,
+  ) => void;
   removerItem: (produtoId: string) => void;
   atualizarQuantidade: (produtoId: string, quantidade: number) => void;
   limparCarrinho: () => void;
@@ -76,7 +80,11 @@ export function useCart(): UseCartReturn {
   // Se o produto já existir, incrementa a quantidade.
   // Se for novo, adiciona com quantidade 1.
   const adicionarItem = useCallback(
-    (novoItem: Omit<ItemCarrinho, "quantidade">) => {
+    (novoItem: Omit<ItemCarrinho, "quantidade">, quantidade = 1) => {
+      const quantidadeValida = Math.min(
+        MAX_QUANTIDADE_POR_ITEM,
+        Math.max(1, Math.floor(quantidade)),
+      );
       setItens((prev) => {
         const existente = prev.find(
           (i) => i.produto_id === novoItem.produto_id,
@@ -85,12 +93,18 @@ export function useCart(): UseCartReturn {
           // Produto já no carrinho — só incrementa
           return prev.map((i) =>
             i.produto_id === novoItem.produto_id
-              ? { ...i, quantidade: i.quantidade + 1 }
+              ? {
+                  ...i,
+                  quantidade: Math.min(
+                    MAX_QUANTIDADE_POR_ITEM,
+                    i.quantidade + quantidadeValida,
+                  ),
+                }
               : i,
           );
         }
-        // Produto novo — adiciona com quantidade 1
-        return [...prev, { ...novoItem, quantidade: 1 }];
+        // Produto novo — adiciona com a quantidade selecionada
+        return [...prev, { ...novoItem, quantidade: quantidadeValida }];
       });
       // Abre o drawer automaticamente ao adicionar
       setIsOpen(true);
@@ -115,9 +129,13 @@ export function useCart(): UseCartReturn {
         setItens((prev) => prev.filter((i) => i.produto_id !== produtoId));
         return;
       }
+      const quantidadeValida = Math.min(
+        MAX_QUANTIDADE_POR_ITEM,
+        Math.max(1, Math.floor(quantidade)),
+      );
       setItens((prev) =>
         prev.map((i) =>
-          i.produto_id === produtoId ? { ...i, quantidade } : i,
+          i.produto_id === produtoId ? { ...i, quantidade: quantidadeValida } : i,
         ),
       );
     },

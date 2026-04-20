@@ -12,8 +12,9 @@
 
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
-import { ShoppingCart, Zap } from "lucide-react";
+import { Minus, Plus, ShoppingCart, Zap } from "lucide-react";
 import type { ProdutoVenda, ItemCarrinho } from "@/types/vendas.types";
 import { gerarLinkWhatsAppSingle } from "@/modules/vendas/lib/whatsapp";
 
@@ -23,7 +24,10 @@ import { gerarLinkWhatsAppSingle } from "@/modules/vendas/lib/whatsapp";
 interface ProductCardProps {
   produto: ProdutoVenda;
   whatsappNumber: string;
-  onAdicionarCarrinho: (item: Omit<ItemCarrinho, "quantidade">) => void;
+  onAdicionarCarrinho: (
+    item: Omit<ItemCarrinho, "quantidade">,
+    quantidade?: number,
+  ) => void;
   corPrimaria?: string;
 }
 
@@ -32,6 +36,7 @@ interface ProductCardProps {
 // =============================================================================
 // Raiz do backend — imagens são servidas por ele, não pelo frontend
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const MAX_QUANTIDADE = 99;
 
 // Constrói a URL completa para imagens armazenadas como caminhos relativos
 // ex: "/uploads/vendas/xxx.jpg" → "http://localhost:3000/uploads/vendas/xxx.jpg"
@@ -47,6 +52,11 @@ export function ProductCard({
   onAdicionarCarrinho,
   corPrimaria = "#4f46e5",
 }: ProductCardProps) {
+  const [quantidade, setQuantidade] = useState(1);
+  const [imagemInvalida, setImagemInvalida] = useState(false);
+  const normalizarQuantidade = (valor: number) =>
+    Math.min(MAX_QUANTIDADE, Math.max(1, Math.floor(valor || 1)));
+
   const precoAtivo = produto.preco_promocional ?? produto.preco;
   const temPromocao =
     produto.preco_promocional !== null &&
@@ -54,8 +64,9 @@ export function ProductCard({
 
   const formatarPreco = (valor: number) =>
     valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fotoUrl = !imagemInvalida ? resolveImageUrl(produto.foto_url) : null;
 
-  const linkComprar = gerarLinkWhatsAppSingle(produto, whatsappNumber);
+  const linkComprar = gerarLinkWhatsAppSingle(produto, whatsappNumber, quantidade);
 
   const handleAdicionarCarrinho = () => {
     onAdicionarCarrinho({
@@ -63,7 +74,7 @@ export function ProductCard({
       nome: produto.nome,
       preco: precoAtivo,
       foto_url: produto.foto_url,
-    });
+    }, quantidade);
   };
 
   return (
@@ -87,20 +98,25 @@ export function ProductCard({
 
       {/* Foto do Produto */}
       <div className="relative w-full h-48 bg-gray-50 overflow-hidden">
-        {produto.foto_url ? (
+        {fotoUrl ? (
           <Image
-            src={resolveImageUrl(produto.foto_url)!}
+            src={fotoUrl}
             alt={produto.nome}
             fill
             className="object-cover group-hover:scale-110 transition-transform duration-500"
             sizes="224px"
             unoptimized
+            onError={() => setImagemInvalida(true)}
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gray-50">
-            <ShoppingCart className="w-10 h-10 text-gray-200" />
-            <span className="text-xs text-gray-300">Sem foto</span>
-          </div>
+          <Image
+            src="/images/sem-foto-produto.svg"
+            alt="Produto sem foto"
+            fill
+            className="object-cover"
+            sizes="224px"
+            unoptimized
+          />
         )}
         {/* Overlay gradiente sutil */}
         <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/10 to-transparent" />
@@ -136,6 +152,44 @@ export function ProductCard({
               % off
             </span>
           )}
+        </div>
+
+        {/* Seletor de quantidade */}
+        <div className="mt-3">
+          <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1.5 font-semibold">
+            Quantidade
+          </p>
+          <div className="inline-flex items-center rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setQuantidade((qtd) => normalizarQuantidade(qtd - 1))}
+              disabled={quantidade <= 1}
+              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:hover:bg-transparent disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+              aria-label="Diminuir quantidade"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <input
+              type="number"
+              min={1}
+              max={MAX_QUANTIDADE}
+              value={quantidade}
+              onChange={(e) =>
+                setQuantidade(normalizarQuantidade(Number(e.target.value)))
+              }
+              className="w-12 h-8 text-center text-sm font-bold text-gray-900 outline-none [appearance:textfield]"
+              aria-label="Quantidade do produto"
+            />
+            <button
+              type="button"
+              onClick={() => setQuantidade((qtd) => normalizarQuantidade(qtd + 1))}
+              disabled={quantidade >= MAX_QUANTIDADE}
+              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:hover:bg-transparent disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+              aria-label="Aumentar quantidade"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Botões */}

@@ -409,6 +409,15 @@ export interface ProdutoInput {
  * 'receita' = dinheiro entrando | 'despesa' = dinheiro saindo
  */
 export type TransactionType = "receita" | "despesa";
+export type CommitmentType =
+  | "conta_fixa_mensal"
+  | "assinatura_mensal"
+  | "parcelamento";
+export type FinancialOccurrenceStatus =
+  | "pendente"
+  | "pago"
+  | "atrasado"
+  | "cancelado";
 
 /**
  * Representa uma transação financeira.
@@ -419,6 +428,8 @@ export interface Transacao {
   amount: number; // Sempre positivo — o tipo indica a direção
   description: string;
   category?: string;
+  supplier?: string;
+  costCenter?: string;
   transactionDate: string;
   createdAt: string;
   updatedAt: string;
@@ -454,7 +465,138 @@ export interface TransacaoInput {
   amount: number;
   description: string;
   category?: string;
+  supplier?: string;
+  costCenter?: string;
   transactionDate?: string; // YYYY-MM-DD, default = hoje
+}
+
+export interface FinancialCommitment {
+  id: string;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  supplier?: string | null;
+  costCenter?: string | null;
+  type: CommitmentType;
+  direction: TransactionType;
+  amount: number;
+  startDate: string;
+  endDate?: string | null;
+  dueDay: number;
+  installmentCount?: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinancialCommitmentInput {
+  title: string;
+  description?: string;
+  category?: string;
+  supplier?: string;
+  costCenter?: string;
+  type: CommitmentType;
+  direction: TransactionType;
+  amount: number;
+  startDate: string;
+  endDate?: string;
+  dueDay?: number;
+  installmentCount?: number;
+}
+
+export interface FinancialCommitmentListResponse {
+  data: FinancialCommitment[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface FinancialOccurrence {
+  id: string;
+  commitmentId: string;
+  commitmentTitle: string;
+  commitmentType: CommitmentType;
+  direction: TransactionType;
+  category?: string | null;
+  supplier?: string | null;
+  costCenter?: string | null;
+  competenceMonth: string;
+  dueDate: string;
+  installmentNumber: number;
+  installmentCount?: number | null;
+  expectedAmount: number;
+  status: FinancialOccurrenceStatus;
+  paidAmount?: number | null;
+  paidAt?: string | null;
+  transactionId?: string | null;
+}
+
+export interface FinancialProjectionResponse {
+  periodo: { fromMonth: string; toMonth: string };
+  resumo: {
+    totalPrevisto: number;
+    totalPago: number;
+    totalPendente: number;
+    totalAtrasado: number;
+  };
+  ocorrencias: FinancialOccurrence[];
+}
+
+export interface SettleOccurrenceInput {
+  paidAmount?: number;
+  paymentDate?: string;
+  penaltyAmount?: number;
+  interestAmount?: number;
+  discountAmount?: number;
+  notes?: string;
+  createTransaction?: boolean;
+}
+
+export interface FinancialDashboardResponse {
+  monthly: Array<{
+    month: string;
+    previsto: number;
+    pago: number;
+    realizadoReceitas: number;
+    realizadoDespesas: number;
+    saldoRealizado: number;
+  }>;
+  totals: {
+    previsto: number;
+    pago: number;
+    realizadoReceitas: number;
+    realizadoDespesas: number;
+    saldoRealizado: number;
+  };
+}
+
+export interface ImportBankCsvResult {
+  imported: number;
+  skipped: number;
+  duplicated: number;
+  errors: Array<{ row: number; reason: string }>;
+}
+
+export interface FinancialMonthlyHistoryItem {
+  id: string;
+  month: string;
+  previsto: number;
+  pago: number;
+  pendente: number;
+  atrasado: number;
+  realizadoReceitas: number;
+  realizadoDespesas: number;
+  saldoRealizado: number;
+  generatedAt: string;
+}
+
+export interface FinancialMonthlyHistoryListResponse {
+  data: FinancialMonthlyHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 // =============================================================================
