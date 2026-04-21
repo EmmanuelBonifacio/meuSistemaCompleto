@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { LandingImage } from "./landing-image";
@@ -392,10 +391,9 @@ export function SaasPlatformLanding() {
                       <p className="text-3xl font-extrabold text-slate-900">
                         R$ 180
                         <span className="text-base font-normal text-slate-400">
-                          ,00
+                          ,00/mês
                         </span>
                       </p>
-                      <p className="text-xs text-slate-400">R$ 30/mês</p>
                     </div>
                   </div>
                   <p className="mt-4 text-sm text-slate-500">
@@ -420,11 +418,11 @@ export function SaasPlatformLanding() {
                         12 meses com economia garantida
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-3xl font-extrabold text-white">
+                    <div className="pt-1 text-right">
+                      <p className="text-3xl font-extrabold leading-none text-white">
                         R$ 150
-                        <span className="text-base font-normal text-blue-300">
-                          /mês
+                        <span className="ml-1 text-base font-normal text-blue-200">
+                          ,00/mês
                         </span>
                       </p>
                       <p className="text-xs text-blue-300">
@@ -635,12 +633,6 @@ export function SaasPlatformLanding() {
             >
               Ver demo
             </a>
-            <Link
-              href="/admin"
-              className="text-sm text-slate-500 transition hover:text-[#2563eb]"
-            >
-              Painel Admin
-            </Link>
           </div>
         </div>
       </footer>
