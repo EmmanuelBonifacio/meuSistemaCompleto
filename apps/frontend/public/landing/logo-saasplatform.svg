@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 44" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">SaaSPlatform</title>
+  <desc id="desc">Logotipo SaaSPlatform</desc>
+  <rect width="44" height="44" rx="11" fill="#0f172a"/>
+  <text x="22" y="30" text-anchor="middle" fill="#ffffff" font-family="system-ui, Segoe UI, sans-serif" font-size="20" font-weight="700">S</text>
+  <text x="54" y="29" fill="#0f172a" font-family="system-ui, Segoe UI, sans-serif" font-size="19" font-weight="600">SaaS</text>
+  <text x="102" y="29" fill="#2563eb" font-family="system-ui, Segoe UI, sans-serif" font-size="19" font-weight="600">Platform</text>
+</svg>

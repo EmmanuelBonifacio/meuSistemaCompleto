@@ -25,13 +25,8 @@ const config: Config = {
   // Modo "class" permite ativar/desativar dark mode via classe .dark no <html>
   darkMode: ["class"],
 
-  // Quais arquivos o Tailwind deve escanear para encontrar classes usadas
-  content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/modules/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
+  // Qualquer .tsx sob src/ (inclui pastas novas como components/landing) — evita purge a perder estilos
+  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
 
   theme: {
     extend: {

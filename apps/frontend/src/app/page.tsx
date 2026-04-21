@@ -1,14 +1,18 @@
 // =============================================================================
 // src/app/page.tsx
 // =============================================================================
-// O QUE FAZ:
-//   Página raiz "/" da aplicação. Apenas redireciona para /admin, que é o
-//   ponto de entrada administrativo. Tenants acessam via /<slug>/login.
+// Landing pública na raiz "/". Painel superadmin: /admin. Tenants: /<slug>/login
 // =============================================================================
 
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { SaasPlatformLanding } from "@/components/landing/saas-platform-landing";
+
+export const metadata: Metadata = {
+  title: "SaaSPlatform — Módulo de Vendas e Catálogo",
+  description:
+    "Catálogo online com pedidos pelo WhatsApp. Planos, suporte e módulo de vendas para o seu negócio.",
+};
 
 export default function RootPage() {
-  // Redireciona imediatamente para o painel administrativo
-  redirect("/admin");
+  return <SaasPlatformLanding />;
 }
