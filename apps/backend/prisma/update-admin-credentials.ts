@@ -1,5 +1,7 @@
 import bcrypt from "bcrypt";
-import { prisma } from "../src/core/database/prisma";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient({ log: ["error"] });
 
 const TARGET_EMAIL = process.env.ADMIN_EMAIL;
 const TARGET_PASSWORD = process.env.ADMIN_PASSWORD;
