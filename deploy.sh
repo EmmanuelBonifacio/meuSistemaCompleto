@@ -91,6 +91,13 @@ npm run db:migrate:tv-plan
 echo "  → Migração: xibo_platform_ads..."
 npm run db:migrate:xibo-ads
 
+if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
+  echo "  → Atualizando credenciais do superadmin..."
+  npm run db:admin:update
+else
+  echo "  → ADMIN_EMAIL/ADMIN_PASSWORD não definidos; pulando atualização do superadmin."
+fi
+
 echo -e "${GREEN}✓ Banco de dados atualizado${NC}"
 
 # ------------------------------------------------------------------------------

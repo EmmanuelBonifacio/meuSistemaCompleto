@@ -60,11 +60,11 @@ export function CategoryRow({
 
   return (
     <section
-      className="py-8"
+      className="py-7"
       style={
         isLancamentos || isPromocoes
           ? {
-              background: `linear-gradient(135deg, ${corClara} 0%, white 100%)`,
+              background: `linear-gradient(180deg, ${corClara} 0%, white 100%)`,
             }
           : {}
       }
@@ -88,8 +88,8 @@ export function CategoryRow({
               </span>
             )}
             {isPromocoes && (
-              <span className="text-xs bg-red-500 text-white px-2.5 py-0.5 rounded-full font-semibold animate-pulse">
-                🔥 Oferta
+              <span className="text-xs bg-red-500 text-white px-2.5 py-0.5 rounded-full font-semibold">
+                Oferta
               </span>
             )}
           </div>
@@ -115,7 +115,7 @@ export function CategoryRow({
         {/* Container scrollável */}
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory"
+          className="flex items-stretch gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {produtos.map((produto) => (

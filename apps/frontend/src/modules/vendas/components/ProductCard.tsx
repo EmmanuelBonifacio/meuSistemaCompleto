@@ -78,7 +78,7 @@ export function ProductCard({
   };
 
   return (
-    <article className="group relative flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 w-56 flex-shrink-0">
+    <article className="group relative flex h-[560px] flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 w-56 flex-shrink-0">
       {/* Badge Promoção */}
       {temPromocao && (
         <span className="absolute top-2.5 left-2.5 z-10 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md">
@@ -97,13 +97,13 @@ export function ProductCard({
       )}
 
       {/* Foto do Produto */}
-      <div className="relative w-full h-48 bg-gray-50 overflow-hidden">
+      <div className="relative w-full h-44 bg-gray-50 overflow-hidden">
         {fotoUrl ? (
           <Image
             src={fotoUrl}
             alt={produto.nome}
             fill
-            className="object-cover group-hover:scale-110 transition-transform duration-500"
+            className="object-cover"
             sizes="224px"
             unoptimized
             onError={() => setImagemInvalida(true)}
@@ -124,18 +124,18 @@ export function ProductCard({
 
       {/* Informações */}
       <div className="flex flex-col gap-2 p-4 flex-1">
-        <h3 className="text-sm font-bold text-gray-900 line-clamp-2 leading-snug">
+        <h3 className="min-h-[42px] text-sm font-bold text-gray-900 line-clamp-2 leading-snug">
           {produto.nome}
         </h3>
 
         {produto.descricao && (
-          <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+          <p className="min-h-[36px] text-xs text-gray-500 line-clamp-2 leading-relaxed">
             {produto.descricao}
           </p>
         )}
 
         {/* Preços */}
-        <div className="mt-auto pt-2">
+        <div className="min-h-[52px] pt-1">
           {temPromocao && (
             <span className="text-xs text-gray-400 line-through block">
               {formatarPreco(produto.preco)}
@@ -155,7 +155,7 @@ export function ProductCard({
         </div>
 
         {/* Seletor de quantidade */}
-        <div className="mt-3">
+        <div className="mt-2">
           <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1.5 font-semibold">
             Quantidade
           </p>
@@ -193,7 +193,7 @@ export function ProductCard({
         </div>
 
         {/* Botões */}
-        <div className="flex flex-col gap-2 mt-3">
+        <div className="flex flex-col gap-2 mt-auto pt-2">
           <a
             href={linkComprar}
             target="_blank"

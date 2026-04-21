@@ -15,7 +15,9 @@
     "db:migrate:auth": "tsx prisma/migrate-add-auth-tables.ts",
     "db:migrate:tv-plan": "tsx prisma/migrate-tenant-tv-plan.ts",
     "db:migrate:xibo-ads": "tsx prisma/migrate-xibo-platform-ads.ts",
+    "db:admin:update": "tsx prisma/update-admin-credentials.ts",
     "db:seed:user": "tsx prisma/seed-user.ts",
+    "db:seed:demo-stores": "tsx prisma/seed-demo-stores.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:studio": "prisma studio"

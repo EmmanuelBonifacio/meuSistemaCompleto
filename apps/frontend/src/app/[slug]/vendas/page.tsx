@@ -398,18 +398,18 @@ export default function VendasPage() {
               { icon: Shield, label: "Compra Segura" },
               { icon: MessageCircle, label: "Atendimento no WhatsApp" },
             ].map(({ icon: Icon, label }) => (
-              <div
+              <span
                 key={label}
                 className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 text-white text-sm font-medium border border-white/20"
               >
                 <Icon className="w-3.5 h-3.5" />
                 {label}
-              </div>
+              </span>
             ))}
           </div>
         </div>
 
-        {/* Curva decorativa de transiÃ§Ã£o para o conteÃºdo */}
+        {/* Curva decorativa de transição para o conteúdo */}
         <div
           className="h-10 bg-gray-50"
           style={{
