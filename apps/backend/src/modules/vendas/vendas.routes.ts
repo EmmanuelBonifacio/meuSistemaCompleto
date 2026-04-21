@@ -86,7 +86,16 @@ async function publicOrTenantResolver(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
+  const { slug } = request.query as { slug?: string };
   const auth = request.headers.authorization;
+
+  // Se a rota pública informar um slug explicitamente, ele deve vencer.
+  // Isso evita que um JWT de outro tenant "contamine" a vitrine pública
+  // quando o usuário já está logado em outra loja no mesmo navegador.
+  if (slug) {
+    return publicTenantResolver(request, reply);
+  }
+
   if (auth && auth.startsWith("Bearer ")) {
     return tenantMiddleware(request, reply);
   }
