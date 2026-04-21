@@ -135,13 +135,13 @@
   }
 
   .saas-landing-logo {
-    max-width: min(240px, 100%);
-    max-height: 2.75rem;
+    max-width: min(1350px, 100%);
+    max-height: 18rem;
   }
 
   .saas-landing-logo img {
-    max-width: min(240px, 100%) !important;
-    max-height: 2.75rem !important;
+    max-width: min(1350px, 100%) !important;
+    max-height: 18rem !important;
     width: auto !important;
     height: auto !important;
     object-fit: contain;
