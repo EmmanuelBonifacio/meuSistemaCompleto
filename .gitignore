@@ -48,6 +48,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# ─── Banco de dados local (PostgreSQL dev) ────────────────────────────────────
+.local-pg/
+
 # ─── TypeScript ──────────────────────────────────────────────────────────────
 *.tsbuildinfo
 -e 
