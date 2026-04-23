@@ -620,6 +620,7 @@ export function VendasDashboard() {
                 )}
                 Salvar Configurações
               </button>
+            </div>
           )}
 
           {/* ABA: Produtos */}
