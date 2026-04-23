@@ -101,7 +101,7 @@ export function ProductCard({
   };
 
   return (
-    <article className="group relative flex h-[min(560px,85dvh)] sm:h-[560px] w-[min(100%,14rem)] max-w-[14rem] flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 flex-shrink-0 touch-manipulation">
+    <article className="group relative flex h-[min(560px,85dvh)] sm:h-[560px] md:h-[620px] w-[min(100%,14rem)] max-w-[14rem] md:w-60 lg:w-[17rem] md:max-w-none flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 flex-shrink-0 touch-manipulation">
       {/* Badge Promoção */}
       {temPromocao && (
         <span className="absolute top-2.5 left-2.5 z-10 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md">
@@ -120,14 +120,14 @@ export function ProductCard({
       )}
 
       {/* Foto do Produto */}
-      <div className="relative w-full h-44 bg-gray-50 overflow-hidden">
+      <div className="relative w-full h-44 md:h-56 bg-gray-50 overflow-hidden">
         {fotoUrl ? (
           <Image
             src={fotoUrl}
             alt={produto.nome}
             fill
             className="object-cover"
-            sizes="224px"
+            sizes="(min-width: 1024px) 272px, (min-width: 768px) 240px, 224px"
             unoptimized
             onError={() => setImagemInvalida(true)}
           />
@@ -137,7 +137,7 @@ export function ProductCard({
             alt="Produto sem foto"
             fill
             className="object-cover"
-            sizes="224px"
+            sizes="(min-width: 1024px) 272px, (min-width: 768px) 240px, 224px"
             unoptimized
           />
         )}
