@@ -7,36 +7,28 @@
 // =============================================================================
 
 import type { ProdutoVenda, ItemCarrinho } from "@/types/vendas.types";
+import { formatBrl, formatQuantidadeKg } from "@/lib/format-ptbr";
 
-/**
- * Formata um valor numérico como moeda brasileira.
- * Ex: 1299.9 → "R$ 1.299,90"
- */
-function formatarMoeda(valor: number): string {
-  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-/**
- * Gera o link wa.me para compra de UM produto diretamente (botão "Comprar" do card).
- *
- * @param produto        - Produto a ser comprado
- * @param whatsappNumber - Número com DDI. Ex: "5511999999999"
- * @returns URL completa do link wa.me
- */
 export function gerarLinkWhatsAppSingle(
   produto: ProdutoVenda,
   whatsappNumber: string,
   quantidade = 1,
 ): string {
-  const quantidadeValida = Math.min(99, Math.max(1, Math.floor(quantidade)));
+  const porPeso = produto.vendido_por_peso ?? false;
   const preco = produto.preco_promocional ?? produto.preco;
+  const quantidadeValida = porPeso
+    ? Math.round(Math.min(99, Math.max(0.05, quantidade)) * 100) / 100
+    : Math.min(99, Math.max(1, Math.floor(quantidade)));
   const total = preco * quantidadeValida;
+  const linhaProduto = porPeso
+    ? `- ${formatQuantidadeKg(quantidadeValida)} kg × ${produto.nome} — ${formatBrl(preco)}/kg`
+    : `- ${quantidadeValida}x ${produto.nome} — ${formatBrl(preco)} c/u`;
   const texto = [
     "Olá! Quero comprar:",
     "",
-    `- ${quantidadeValida}x ${produto.nome} - ${formatarMoeda(preco)} cada`,
+    linhaProduto,
     "",
-    `*Total: ${formatarMoeda(total)}*`,
+    `*Total: ${formatBrl(total)}*`,
   ].join("\n");
 
   return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(texto)}`;
@@ -53,9 +45,14 @@ export function gerarLinkWhatsAppCarrinho(
   itens: ItemCarrinho[],
   whatsappNumber: string,
 ): string {
-  const linhas = itens.map(
-    (item) => `- ${item.quantidade}x ${item.nome} - ${formatarMoeda(item.preco)} cada`,
-  );
+  const linhas = itens.map((item) => {
+    const porPeso = item.vendido_por_peso ?? false;
+    if (porPeso) {
+      const kg = item.quantidade;
+      return `- ${formatQuantidadeKg(kg)} kg × ${item.nome} — ${formatBrl(item.preco)}/kg`;
+    }
+    return `- ${item.quantidade}x ${item.nome} — ${formatBrl(item.preco)} c/u`;
+  });
 
   const total = itens.reduce((soma, i) => soma + i.preco * i.quantidade, 0);
 
@@ -64,7 +61,7 @@ export function gerarLinkWhatsAppCarrinho(
     "",
     ...linhas,
     "",
-    `*Total: ${formatarMoeda(total)}*`,
+    `*Total: ${formatBrl(total)}*`,
   ].join("\n");
 
   return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(texto)}`;

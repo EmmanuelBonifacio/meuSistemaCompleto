@@ -130,7 +130,7 @@ export function ScreenShareModal({
             <p className="font-medium text-foreground">Como funciona:</p>
             <ol className="space-y-1 list-decimal list-inside">
               <li>Selecione a TV destino abaixo</li>
-              <li>Clique em "Iniciar Espelhamento"</li>
+              <li>Clique em &apos;Iniciar Espelhamento&apos;</li>
               <li>
                 Uma nova aba abrirá — selecione a janela para compartilhar
               </li>

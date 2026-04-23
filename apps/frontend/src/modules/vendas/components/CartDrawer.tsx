@@ -22,9 +22,11 @@ import Image from "next/image";
 import type { ItemCarrinho } from "@/types/vendas.types";
 import { gerarLinkWhatsAppCarrinho } from "@/modules/vendas/lib/whatsapp";
 import { createPedido } from "@/services/vendas.service";
+import { formatBrl, formatQuantidadeKg } from "@/lib/format-ptbr";
 
 // Resolve URL relativa para absoluta (corrige imagens do carrinho)
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const STEP_KG = 0.05;
 function resolveImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -67,8 +69,8 @@ export function CartDrawer({
     Record<string, boolean>
   >({});
 
-  const formatarMoeda = (valor: number) =>
-    valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatarMoeda = (valor: number) => formatBrl(valor);
+  const formatarPeso = (kg: number) => formatQuantidadeKg(kg);
 
   // -------------------------------------------------------------------------
   // Finalizar no WhatsApp
@@ -113,7 +115,7 @@ export function CartDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="Carrinho de compras"
-        className={`fixed right-0 top-0 z-50 h-full w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-50 h-[100dvh] max-h-[100dvh] w-full max-w-md bg-white shadow-2xl flex flex-col touch-manipulation transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -148,6 +150,7 @@ export function CartDrawer({
             </div>
           ) : (
             itens.map((item) => {
+              const porPeso = item.vendido_por_peso ?? false;
               const fotoUrl = imagensInvalidas[item.produto_id]
                 ? null
                 : resolveImageUrl(item.foto_url);
@@ -155,92 +158,100 @@ export function CartDrawer({
               return (
                 <div
                   key={item.produto_id}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
+                  className="flex flex-col gap-3 p-3 bg-gray-50 rounded-xl sm:flex-row sm:items-center"
                 >
-                {/* Foto do item — corrige URLs relativas */}
-                <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                  {fotoUrl ? (
-                    <Image
-                      src={fotoUrl}
-                      alt={item.nome}
-                      fill
-                      className="object-cover"
-                      sizes="64px"
-                      unoptimized
-                      onError={() =>
-                        setImagensInvalidas((prev) => ({
-                          ...prev,
-                          [item.produto_id]: true,
-                        }))
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                      {fotoUrl ? (
+                        <Image
+                          src={fotoUrl}
+                          alt={item.nome}
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                          unoptimized
+                          onError={() =>
+                            setImagensInvalidas((prev) => ({
+                              ...prev,
+                              [item.produto_id]: true,
+                            }))
+                          }
+                        />
+                      ) : (
+                        <Image
+                          src="/images/sem-foto-produto.svg"
+                          alt="Produto sem foto"
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                          unoptimized
+                        />
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {item.nome}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {porPeso
+                          ? `${formatarMoeda(item.preco)}/kg`
+                          : `${formatarMoeda(item.preco)} / un.`}
+                      </p>
+                      <p
+                        className="text-sm font-bold"
+                        style={{ color: corPrimaria }}
+                      >
+                        {formatarMoeda(item.preco * item.quantidade)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-shrink-0 items-center justify-end gap-2 sm:ml-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAtualizarQuantidade(
+                          item.produto_id,
+                          porPeso
+                            ? Math.round((item.quantidade - STEP_KG) * 100) / 100
+                            : item.quantidade - 1,
+                        )
                       }
-                    />
-                  ) : (
-                    <Image
-                      src="/images/sem-foto-produto.svg"
-                      alt="Produto sem foto"
-                      fill
-                      className="object-cover"
-                      sizes="64px"
-                      unoptimized
-                    />
-                  )}
-                </div>
-
-                {/* Informações do item */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {item.nome}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {formatarMoeda(item.preco)} / un.
-                  </p>
-                  <p
-                    className="text-sm font-bold"
-                    style={{ color: corPrimaria }}
-                  >
-                    {formatarMoeda(item.preco * item.quantidade)}
-                  </p>
-                </div>
-
-                {/* Controle de quantidade */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() =>
-                      onAtualizarQuantidade(
-                        item.produto_id,
-                        item.quantidade - 1,
-                      )
-                    }
-                    className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold flex items-center justify-center transition-colors"
-                    aria-label="Diminuir quantidade"
-                  >
-                    −
-                  </button>
-                  <span className="w-6 text-center text-sm font-semibold text-gray-900">
-                    {item.quantidade}
-                  </span>
-                  <button
-                    onClick={() =>
-                      onAtualizarQuantidade(
-                        item.produto_id,
-                        item.quantidade + 1,
-                      )
-                    }
-                    className="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold flex items-center justify-center transition-colors"
-                    aria-label="Aumentar quantidade"
-                  >
-                    +
-                  </button>
-
-                  {/* Botão remover item */}
-                  <button
-                    onClick={() => onRemoverItem(item.produto_id)}
-                    className="ml-1 p-1 text-gray-400 hover:text-red-500 transition-colors"
-                    aria-label="Remover item"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                      className="flex h-10 min-w-10 items-center justify-center rounded-full bg-gray-200 text-base font-bold text-gray-700 transition-colors hover:bg-gray-300 active:bg-gray-400 sm:h-7 sm:min-w-7 sm:text-sm"
+                      aria-label={porPeso ? "Diminuir peso" : "Diminuir quantidade"}
+                    >
+                      −
+                    </button>
+                    <span
+                      className={`min-w-[2.75rem] text-center text-sm font-semibold text-gray-900 sm:min-w-[1.5rem] ${porPeso ? "px-0.5" : ""}`}
+                    >
+                      {porPeso ? formatarPeso(item.quantidade) : item.quantidade}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAtualizarQuantidade(
+                          item.produto_id,
+                          porPeso
+                            ? Math.round((item.quantidade + STEP_KG) * 100) / 100
+                            : item.quantidade + 1,
+                        )
+                      }
+                      className="flex h-10 min-w-10 items-center justify-center rounded-full bg-gray-200 text-base font-bold text-gray-700 transition-colors hover:bg-gray-300 active:bg-gray-400 sm:h-7 sm:min-w-7 sm:text-sm"
+                      aria-label={porPeso ? "Aumentar peso" : "Aumentar quantidade"}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoverItem(item.produto_id)}
+                      className="ml-0.5 flex h-10 w-10 items-center justify-center text-gray-400 transition-colors hover:text-red-500 sm:h-8 sm:w-8"
+                      aria-label="Remover item"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -249,7 +260,7 @@ export function CartDrawer({
 
         {/* Footer com Total e Botão de Checkout */}
         {itens.length > 0 && (
-          <div className="border-t border-gray-100 p-4 space-y-3">
+          <div className="border-t border-gray-100 p-4 space-y-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
             {/* Total */}
             <div className="flex items-center justify-between">
               <span className="text-gray-600 font-medium">Total</span>

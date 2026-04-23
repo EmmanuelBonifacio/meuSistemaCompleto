@@ -215,7 +215,7 @@ export function TenantTable() {
                       <Building2 className="mx-auto mb-3 h-8 w-8 opacity-30" />
                       <p className="font-medium">Nenhum tenant cadastrado</p>
                       <p className="text-xs mt-1">
-                        Clique em "Novo Tenant" para começar.
+                        Clique em &apos;Novo Tenant&apos; para começar.
                       </p>
                     </td>
                   </tr>

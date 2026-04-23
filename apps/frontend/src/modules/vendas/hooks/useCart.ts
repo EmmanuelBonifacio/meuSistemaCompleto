@@ -15,6 +15,13 @@ import type { ItemCarrinho } from "@/types/vendas.types";
 // Chave usada no localStorage — prefixo evita colisão com outras libs
 const CART_STORAGE_KEY = "@saas/carrinho-vendas";
 const MAX_QUANTIDADE_POR_ITEM = 99;
+const MAX_KG_POR_ITEM = 99;
+const MIN_KG = 0.05;
+const STEP_KG = 0.05;
+
+function arredondarKg(valor: number): number {
+  return Math.round(valor * 100) / 100;
+}
 
 // =============================================================================
 // INTERFACE: Estado e ações exportadas pelo hook
@@ -55,7 +62,13 @@ export function useCart(): UseCartReturn {
     try {
       const salvo = localStorage.getItem(CART_STORAGE_KEY);
       if (salvo) {
-        setItens(JSON.parse(salvo));
+        const bruto = JSON.parse(salvo) as ItemCarrinho[];
+        setItens(
+          bruto.map((i) => ({
+            ...i,
+            vendido_por_peso: i.vendido_por_peso ?? false,
+          })),
+        );
       }
     } catch {
       // Carrinho corrompido — começa vazio
@@ -81,18 +94,42 @@ export function useCart(): UseCartReturn {
   // Se for novo, adiciona com quantidade 1.
   const adicionarItem = useCallback(
     (novoItem: Omit<ItemCarrinho, "quantidade">, quantidade = 1) => {
-      const quantidadeValida = Math.min(
-        MAX_QUANTIDADE_POR_ITEM,
-        Math.max(1, Math.floor(quantidade)),
-      );
+      const porPeso = !!novoItem.vendido_por_peso;
+      const quantidadeValida = porPeso
+        ? arredondarKg(
+            Math.min(
+              MAX_KG_POR_ITEM,
+              Math.max(MIN_KG, quantidade),
+            ),
+          )
+        : Math.min(
+            MAX_QUANTIDADE_POR_ITEM,
+            Math.max(1, Math.floor(quantidade)),
+          );
       setItens((prev) => {
         const existente = prev.find(
-          (i) => i.produto_id === novoItem.produto_id,
+          (i) =>
+            i.produto_id === novoItem.produto_id &&
+            !!i.vendido_por_peso === porPeso,
         );
         if (existente) {
-          // Produto já no carrinho — só incrementa
+          if (porPeso) {
+            return prev.map((i) =>
+              i.produto_id === novoItem.produto_id && !!i.vendido_por_peso
+                ? {
+                    ...i,
+                    quantidade: arredondarKg(
+                      Math.min(
+                        MAX_KG_POR_ITEM,
+                        i.quantidade + quantidadeValida,
+                      ),
+                    ),
+                  }
+                : i,
+            );
+          }
           return prev.map((i) =>
-            i.produto_id === novoItem.produto_id
+            i.produto_id === novoItem.produto_id && !i.vendido_por_peso
               ? {
                   ...i,
                   quantidade: Math.min(
@@ -103,7 +140,6 @@ export function useCart(): UseCartReturn {
               : i,
           );
         }
-        // Produto novo — adiciona com a quantidade selecionada
         return [...prev, { ...novoItem, quantidade: quantidadeValida }];
       });
       // Abre o drawer automaticamente ao adicionar
@@ -125,19 +161,33 @@ export function useCart(): UseCartReturn {
   // Se quantidade <= 0, remove o item do carrinho.
   const atualizarQuantidade = useCallback(
     (produtoId: string, quantidade: number) => {
-      if (quantidade <= 0) {
-        setItens((prev) => prev.filter((i) => i.produto_id !== produtoId));
-        return;
-      }
-      const quantidadeValida = Math.min(
-        MAX_QUANTIDADE_POR_ITEM,
-        Math.max(1, Math.floor(quantidade)),
-      );
-      setItens((prev) =>
-        prev.map((i) =>
+      setItens((prev) => {
+        const alvo = prev.find((i) => i.produto_id === produtoId);
+        if (!alvo) return prev;
+
+        if (alvo.vendido_por_peso) {
+          if (quantidade < MIN_KG) {
+            return prev.filter((i) => i.produto_id !== produtoId);
+          }
+          const q = arredondarKg(
+            Math.min(MAX_KG_POR_ITEM, Math.max(MIN_KG, quantidade)),
+          );
+          return prev.map((i) =>
+            i.produto_id === produtoId ? { ...i, quantidade: q } : i,
+          );
+        }
+
+        if (quantidade <= 0) {
+          return prev.filter((i) => i.produto_id !== produtoId);
+        }
+        const quantidadeValida = Math.min(
+          MAX_QUANTIDADE_POR_ITEM,
+          Math.max(1, Math.floor(quantidade)),
+        );
+        return prev.map((i) =>
           i.produto_id === produtoId ? { ...i, quantidade: quantidadeValida } : i,
-        ),
-      );
+        );
+      });
     },
     [],
   );

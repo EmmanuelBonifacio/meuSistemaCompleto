@@ -28,6 +28,7 @@ import { requireModule } from "../../core/middleware/module.middleware";
 import * as vendasController from "./vendas.controller";
 import * as pedidosController from "./vendas.pedidos.controller";
 import { prisma } from "../../core/database/prisma";
+import { isValidPublicTenantSlug, slugFromQueryValue } from "./vendas.schema";
 
 // Guard reutilizável para todas as rotas protegidas do módulo vendas
 const moduleGuard = [tenantMiddleware, requireModule("vendas")];
@@ -41,12 +42,20 @@ async function publicTenantResolver(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { slug } = request.query as { slug?: string };
+  const q = request.query as Record<string, unknown>;
+  const slug = slugFromQueryValue(q.slug);
   if (!slug) {
     return reply.status(400).send({
       statusCode: 400,
       error: "Bad Request",
       message: "O parâmetro 'slug' é obrigatório para acessar o catálogo.",
+    });
+  }
+  if (!isValidPublicTenantSlug(slug)) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Bad Request",
+      message: "O parâmetro 'slug' tem formato inválido.",
     });
   }
   const tenant = await prisma.tenant.findUnique({
@@ -86,7 +95,8 @@ async function publicOrTenantResolver(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { slug } = request.query as { slug?: string };
+  const q = request.query as Record<string, unknown>;
+  const slug = slugFromQueryValue(q.slug);
   const auth = request.headers.authorization;
 
   // Se a rota pública informar um slug explicitamente, ele deve vencer.
@@ -122,14 +132,22 @@ export async function vendasRoutes(fastify: FastifyInstance) {
   // Registra o pedido quando o visitante clica em "Finalizar no WhatsApp"
   fastify.post("/pedidos", {
     preHandler: [publicTenantResolver],
+    config: {
+      rateLimit: {
+        max: 50,
+        timeWindow: "1 minute",
+      },
+    },
     handler: pedidosController.createPedidoVenda,
   });
 
   // POST /vendas/webhook/whatsapp
   // Endpoint chamado pela Evolution API para cada mensagem recebida
   // NOTA: esta rota NÃO usa tenantMiddleware pois a Evolution API não envia JWT.
-  // Proteja com um token fixo no header se necessário (EVOLUTION_WEBHOOK_TOKEN).
+  // Se EVOLUTION_WEBHOOK_TOKEN estiver definido no .env, exige X-Webhook-Token ou Authorization: Bearer.
   fastify.post("/webhook/whatsapp", {
+    // Serviço externo pode enviar rajadas; o limite global não deve bloquear o webhook
+    config: { rateLimit: false },
     handler: pedidosController.webhookWhatsApp,
   });
 

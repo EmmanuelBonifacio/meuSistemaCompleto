@@ -30,7 +30,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const [authState, setAuthState] = useState<"checking" | "ok" | "denied">(
     "checking",
   );

@@ -23,15 +23,16 @@ export default function VendasPublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string | string[] }>();
+  const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
 
   // Persiste o slug para que os interceptors do Axios identifiquem o tenant
   // mesmo sem o auth guard do layout pai.
   useEffect(() => {
-    if (params.slug && typeof window !== "undefined") {
-      localStorage.setItem(TENANT_SLUG_KEY, params.slug);
+    if (slug && typeof window !== "undefined") {
+      localStorage.setItem(TENANT_SLUG_KEY, slug);
     }
-  }, [params.slug]);
+  }, [slug]);
 
   return (
     // Fundo cinza clarinho — neutro para qualquer paleta de produto

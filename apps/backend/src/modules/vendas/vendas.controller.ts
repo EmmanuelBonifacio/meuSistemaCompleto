@@ -26,6 +26,11 @@ import {
 } from "./vendas.schema";
 import * as vendasRepository from "./vendas.repository";
 import { withTenantSchema } from "../../core/database/prisma";
+import {
+  MAX_IMAGE_UPLOAD_BYTES,
+  extensionForImageMime,
+  isImageBufferConsistentWithMime,
+} from "../../core/security/image-upload";
 
 // Diretório onde as fotos/logos são salvas.
 // Usa process.cwd() (= apps/backend) para alinhar com o @fastify/static que
@@ -177,8 +182,9 @@ export async function uploadFotoProduto(
     });
   }
 
-  // Lê o arquivo enviado via @fastify/multipart
-  const data = await request.file();
+  const data = await request.file({
+    limits: { fileSize: MAX_IMAGE_UPLOAD_BYTES },
+  });
 
   if (!data) {
     return reply.status(400).send({
@@ -188,14 +194,8 @@ export async function uploadFotoProduto(
     });
   }
 
-  // Validação do tipo MIME — apenas imagens são permitidas
-  const mimeTypesPermitidos = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-  ];
-  if (!mimeTypesPermitidos.includes(data.mimetype)) {
+  const ext = extensionForImageMime(data.mimetype);
+  if (!ext) {
     return reply.status(400).send({
       statusCode: 400,
       error: "Bad Request",
@@ -204,18 +204,24 @@ export async function uploadFotoProduto(
     });
   }
 
+  const buffer = await data.toBuffer();
+  if (!isImageBufferConsistentWithMime(buffer, data.mimetype)) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Bad Request",
+      message: "O conteúdo do ficheiro não corresponde a uma imagem válida.",
+    });
+  }
+
   // Garante que o diretório de uploads existe
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   }
 
-  // Gera nome seguro para o arquivo: {id}-{timestamp}.{ext}
-  const ext = path.extname(data.filename).toLowerCase() || ".jpg";
+  // Nome seguro: extensão derivada do MIME, nunca do nome original
   const nomeArquivo = `${id}-${Date.now()}${ext}`;
   const caminhoCompleto = path.join(UPLOADS_DIR, nomeArquivo);
 
-  // Salva o arquivo em disco
-  const buffer = await data.toBuffer();
   fs.writeFileSync(caminhoCompleto, buffer);
 
   // URL pública do arquivo (servida pelo @fastify/static com prefixo /uploads/)
@@ -358,7 +364,9 @@ export async function uploadLogoVendas(
 ) {
   const schemaName = request.tenant!.schemaName;
 
-  const data = await request.file();
+  const data = await request.file({
+    limits: { fileSize: MAX_IMAGE_UPLOAD_BYTES },
+  });
 
   if (!data) {
     return reply.status(400).send({
@@ -368,13 +376,8 @@ export async function uploadLogoVendas(
     });
   }
 
-  const mimeTypesPermitidos = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-  ];
-  if (!mimeTypesPermitidos.includes(data.mimetype)) {
+  const ext = extensionForImageMime(data.mimetype);
+  if (!ext) {
     return reply.status(400).send({
       statusCode: 400,
       error: "Bad Request",
@@ -383,16 +386,23 @@ export async function uploadLogoVendas(
     });
   }
 
+  const buffer = await data.toBuffer();
+  if (!isImageBufferConsistentWithMime(buffer, data.mimetype)) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: "Bad Request",
+      message: "O conteúdo do ficheiro não corresponde a uma imagem válida.",
+    });
+  }
+
   const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
   if (!fs.existsSync(LOGOS_DIR)) {
     fs.mkdirSync(LOGOS_DIR, { recursive: true });
   }
 
-  const ext = path.extname(data.filename).toLowerCase() || ".jpg";
   const nomeArquivo = `logo-${schemaName}-${Date.now()}${ext}`;
   const caminhoCompleto = path.join(LOGOS_DIR, nomeArquivo);
 
-  const buffer = await data.toBuffer();
   fs.writeFileSync(caminhoCompleto, buffer);
 
   const logoUrl = `/uploads/vendas/logos/${nomeArquivo}`;

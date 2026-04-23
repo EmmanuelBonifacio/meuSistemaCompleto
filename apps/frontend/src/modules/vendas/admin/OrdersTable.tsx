@@ -16,6 +16,7 @@ import { ChevronDown, MessageSquare, Loader2 } from "lucide-react";
 import type { PedidoVenda, StatusPedido } from "@/types/vendas.types";
 import { STATUS_PEDIDO_LABEL, STATUS_PEDIDO_COR } from "@/types/vendas.types";
 import { updatePedido } from "@/services/vendas.service";
+import { formatBrl, formatQuantidadeKg } from "@/lib/format-ptbr";
 
 // =============================================================================
 // PROPS
@@ -38,9 +39,9 @@ export function OrdersTable({ pedidos, onPedidoAtualizado }: OrdersTableProps) {
     {},
   );
 
-  const formatarMoeda = (valor: number) =>
-    valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatarMoeda = (valor: number) => formatBrl(valor);
 
+  /** Data/hora local — pode differir ligeiramente entre SSR e browser; suppressHydrationWarning nas células. */
   const formatarData = (iso: string) =>
     new Date(iso).toLocaleString("pt-BR", {
       day: "2-digit",
@@ -140,7 +141,10 @@ export function OrdersTable({ pedidos, onPedidoAtualizado }: OrdersTableProps) {
             <Fragment key={pedido.id}>
               {/* Linha principal do pedido */}
               <tr className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                <td
+                  className="px-4 py-3 text-gray-600 whitespace-nowrap"
+                  suppressHydrationWarning
+                >
                   {formatarData(pedido.created_at)}
                 </td>
                 <td className="px-4 py-3 text-gray-800">
@@ -214,19 +218,25 @@ export function OrdersTable({ pedidos, onPedidoAtualizado }: OrdersTableProps) {
                           Itens do Pedido
                         </h4>
                         <ul className="space-y-1">
-                          {pedido.itens_json.map((item, i) => (
+                          {pedido.itens_json.map((item, i) => {
+                            const porPeso = item.vendido_por_peso ?? false;
+                            const resumo = porPeso
+                              ? `${formatQuantidadeKg(item.quantidade)} kg — ${item.nome}`
+                              : `${item.quantidade}x ${item.nome}`;
+                            return (
                             <li
                               key={i}
                               className="flex justify-between text-sm"
                             >
                               <span className="text-gray-700">
-                                {item.quantidade}x {item.nome}
+                                {resumo}
                               </span>
                               <span className="font-medium text-gray-900">
                                 {formatarMoeda(item.preco * item.quantidade)}
                               </span>
                             </li>
-                          ))}
+                            );
+                          })}
                         </ul>
                       </div>
 

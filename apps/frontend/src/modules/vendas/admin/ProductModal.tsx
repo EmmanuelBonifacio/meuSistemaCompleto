@@ -65,6 +65,7 @@ const FORM_INICIAL: ProdutoVendaInput = {
   ativo: true,
   destaque: false,
   ordem: 0,
+  vendido_por_peso: false,
 };
 
 // =============================================================================
@@ -98,6 +99,7 @@ export function ProductModal({
         ativo: produto.ativo,
         destaque: produto.destaque,
         ordem: produto.ordem,
+        vendido_por_peso: produto.vendido_por_peso ?? false,
       });
       // Resolve a URL para exibição correta — URLs relativas precisam do prefixo do backend
       setFotoPreview(resolveImageUrl(produto.foto_url));
@@ -183,7 +185,7 @@ export function ProductModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -191,8 +193,8 @@ export function ProductModal({
         aria-hidden="true"
       />
 
-      {/* Modal */}
-      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* Modal: max-h com dvh evita corte com barra do Safari; padding inferior respeita iPhone com notch */}
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[min(100dvh,100vh)] overflow-y-auto touch-manipulation">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
           <h2 className="text-lg font-bold text-gray-900">
@@ -208,7 +210,10 @@ export function ProductModal({
         </div>
 
         {/* Formulário */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="p-4 sm:p-5 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))]"
+        >
           {/* Upload de Foto */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -288,55 +293,138 @@ export function ProductModal({
             />
           </div>
 
-          {/* Preços (linha dupla) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          {/* Tipo de venda: destaque máximo (não depende de scroll lateral) */}
+          <fieldset
+            data-testid="venda-tipo-preco"
+            className="rounded-xl border-2 border-indigo-200 bg-indigo-50 p-4 shadow-sm"
+          >
+            <legend className="px-1 text-sm font-bold text-indigo-900">
+              Tipo de venda na loja
+            </legend>
+            <p className="mb-3 text-xs text-indigo-800/90">
+              Define se o preço abaixo é por <strong>peça</strong> ou por{" "}
+              <strong>1 kg</strong> (balança).
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
               <label
-                htmlFor="preco"
-                className="block text-sm font-medium text-gray-700 mb-1"
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 transition-colors ${
+                  !form.vendido_por_peso
+                    ? "border-indigo-600 bg-white ring-1 ring-indigo-600"
+                    : "border-gray-200 bg-white/80 hover:border-indigo-300"
+                }`}
               >
-                Preço (R$) <span className="text-red-500">*</span>
+                <input
+                  name="tipo_venda_loja"
+                  type="radio"
+                  className="mt-1 h-4 w-4 text-indigo-600"
+                  checked={!form.vendido_por_peso}
+                  onChange={() =>
+                    setForm((f) => ({ ...f, vendido_por_peso: false }))
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">
+                    Por unidade
+                  </span>
+                  <span className="text-xs text-gray-600">
+                    Cliente escolhe quantas unidades.
+                  </span>
+                </span>
               </label>
-              <input
-                id="preco"
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.preco}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    preco: parseFloat(e.target.value) || 0,
-                  }))
-                }
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
-                required
-              />
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 transition-colors ${
+                  form.vendido_por_peso
+                    ? "border-amber-600 bg-amber-50 ring-1 ring-amber-500"
+                    : "border-gray-200 bg-white/80 hover:border-amber-300"
+                }`}
+              >
+                <input
+                  name="tipo_venda_loja"
+                  type="radio"
+                  className="mt-1 h-4 w-4 text-amber-600"
+                  checked={!!form.vendido_por_peso}
+                  onChange={() =>
+                    setForm((f) => ({ ...f, vendido_por_peso: true }))
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">
+                    Por quilo (kg)
+                  </span>
+                  <span className="text-xs text-gray-600">
+                    Preço = R$ por 1 kg na vitrine.
+                  </span>
+                </span>
+              </label>
             </div>
-            <div>
-              <label
-                htmlFor="preco_promo"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Preço Promo (R$)
-              </label>
-              <input
-                id="preco_promo"
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.preco_promocional ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    preco_promocional: e.target.value
-                      ? parseFloat(e.target.value)
-                      : null,
-                  }))
-                }
-                placeholder="Opcional"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
-              />
+          </fieldset>
+
+          {/* Preços */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <p className="text-sm font-medium text-gray-800">
+              {form.vendido_por_peso
+                ? "Preços por quilograma (1 kg)"
+                : "Preços por unidade"}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label
+                  htmlFor="preco"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Preço (R$) <span className="text-red-500">*</span>
+                  {form.vendido_por_peso && (
+                    <span className="ml-1 text-xs font-semibold text-amber-800">
+                      / kg
+                    </span>
+                  )}
+                </label>
+                <input
+                  id="preco"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.preco}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      preco: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+                  required
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="preco_promo"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Preço Promo (R$)
+                  {form.vendido_por_peso && (
+                    <span className="ml-1 text-xs font-semibold text-amber-800">
+                      / kg
+                    </span>
+                  )}
+                </label>
+                <input
+                  id="preco_promo"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.preco_promocional ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      preco_promocional: e.target.value
+                        ? parseFloat(e.target.value)
+                        : null,
+                    }))
+                  }
+                  placeholder="Opcional"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+                />
+              </div>
             </div>
           </div>
 

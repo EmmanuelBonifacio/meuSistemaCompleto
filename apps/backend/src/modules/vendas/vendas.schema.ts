@@ -61,8 +61,15 @@ export const CriarProdutoVendaSchema = z.object({
     .max(60, "Categoria deve ter no máximo 60 caracteres")
     .trim(),
 
-  // URL da imagem — preenchida após o upload
-  foto_url: z.string().url("URL de foto inválida").optional().nullable(),
+  // URL da imagem — preenchida após o upload (string vazia vira null; omitido fica undefined)
+  foto_url: z.preprocess(
+    (v) => {
+      if (v === undefined) return undefined;
+      if (v === "" || v === null) return null;
+      return v;
+    },
+    z.union([z.string().url("URL de foto inválida"), z.null()]).optional(),
+  ),
 
   ativo: z.boolean().default(true),
 
@@ -71,6 +78,9 @@ export const CriarProdutoVendaSchema = z.object({
 
   // Ordem de exibição dentro da categoria (menor = primeiro)
   ordem: z.number().int().min(0).default(0),
+
+  // Se true, preço e preço promocional são por 1 kg (venda por peso)
+  vendido_por_peso: z.boolean().default(false),
 });
 
 // =============================================================================
@@ -86,40 +96,145 @@ export const ProdutoVendaParamsSchema = z.object({
 });
 
 // =============================================================================
+// Helpers: query do Fastify pode vir string | string[]; vazio/ inválido quebra Zod
+// e gerava 500. Normalizamos antes de validar.
+// =============================================================================
+function primeiroQuery(
+  v: unknown,
+): string | number | boolean | null | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (Array.isArray(v)) return v[0] as string | number | boolean | undefined;
+  return v as string | number | boolean;
+}
+
+function intPositivoComDefault(
+  v: unknown,
+  padrao: number,
+  max: number,
+): number {
+  const raw = primeiroQuery(v);
+  if (raw === undefined || raw === null || raw === "")
+    return padrao;
+  const n =
+    typeof raw === "number" ? raw : parseInt(String(raw).trim(), 10);
+  if (!Number.isFinite(n) || n < 1) return padrao;
+  return Math.min(max, n);
+}
+
+/** Slug a partir de `request.query` (string | string[] do Fastify). */
+export function slugFromQueryValue(v: unknown): string | undefined {
+  const x = primeiroQuery(v);
+  if (x === undefined || x === null) return undefined;
+  const s = String(x).trim();
+  return s || undefined;
+}
+
+/** Slug público na query (?slug=) — alinhado ao que o Prisma/tenant usam, evita lixo na pesquisa. */
+const TENANT_SLUG_QUERY_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_TENANT_SLUG_LENGTH = 100;
+
+export function isValidPublicTenantSlug(slug: string): boolean {
+  return (
+    slug.length > 0 &&
+    slug.length <= MAX_TENANT_SLUG_LENGTH &&
+    TENANT_SLUG_QUERY_REGEX.test(slug)
+  );
+}
+
+// =============================================================================
 // SCHEMA: Query string para listagem do catálogo (rota pública)
 // =============================================================================
 export const ListarProdutosVendaQuerySchema = z.object({
-  categoria: z.string().max(50).optional(),
+  categoria: z.preprocess(
+    (v) => {
+      const x = primeiroQuery(v);
+      if (x === undefined || x === null) return undefined;
+      return String(x).trim() || undefined;
+    },
+    z.string().max(50).optional(),
+  ),
 
-  busca: z.string().max(100).optional(),
+  busca: z.preprocess(
+    (v) => {
+      const x = primeiroQuery(v);
+      if (x === undefined || x === null) return undefined;
+      return String(x).trim() || undefined;
+    },
+    z.string().max(100).optional(),
+  ),
 
-  page: z
-    .string()
-    .transform(Number)
-    .pipe(z.number().int().min(1))
-    .optional()
-    .default("1"),
+  page: z.preprocess(
+    (v) => intPositivoComDefault(v, 1, 1_000_000),
+    z.number().int().min(1),
+  ),
 
-  limit: z
-    .string()
-    .transform(Number)
-    .pipe(z.number().int().min(1).max(500))
-    .optional()
-    .default("50"),
+  limit: z.preprocess(
+    (v) => intPositivoComDefault(v, 50, 500),
+    z.number().int().min(1).max(500),
+  ),
 
   // slug é consumido pelo publicTenantResolver antes do handler; ignorado aqui
-  slug: z.string().optional(),
+  slug: z.preprocess(
+    (v) => {
+      const x = primeiroQuery(v);
+      if (x === undefined || x === null) return undefined;
+      return String(x) || undefined;
+    },
+    z.string().optional(),
+  ),
 });
 
 // =============================================================================
 // SCHEMA: Item de pedido (produto + quantidade no carrinho)
 // =============================================================================
-export const ItemPedidoSchema = z.object({
-  produto_id: z.string().uuid("ID de produto inválido"),
-  nome: z.string().min(1),
-  preco: z.number().min(0),
-  quantidade: z.number().int().min(1, "Quantidade mínima é 1"),
-});
+export const ItemPedidoSchema = z
+  .object({
+    produto_id: z.string().uuid("ID de produto inválido"),
+    nome: z.string().min(1),
+    preco: z.number().min(0),
+    quantidade: z.number().positive("Quantidade deve ser positiva"),
+    vendido_por_peso: z.boolean().default(false),
+  })
+  .superRefine((data, ctx) => {
+    if (data.vendido_por_peso) {
+      if (data.quantidade < 0.05) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quantidade"],
+          message: "Peso mínimo é 0,05 kg",
+        });
+      }
+      if (data.quantidade > 99) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quantidade"],
+          message: "Peso máximo é 99 kg",
+        });
+      }
+      const r = Math.round(data.quantidade * 100) / 100;
+      if (Math.abs(r - data.quantidade) > 0.0001) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quantidade"],
+          message: "Peso: no máximo 2 casas decimais",
+        });
+      }
+    } else {
+      if (!Number.isInteger(data.quantidade)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quantidade"],
+          message: "Quantidade deve ser um número inteiro",
+        });
+      } else if (data.quantidade < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quantidade"],
+          message: "Quantidade mínima é 1",
+        });
+      }
+    }
+  });
 
 // =============================================================================
 // SCHEMA: Criação de Pedido via WhatsApp
@@ -180,9 +295,18 @@ export type ItemPedido = z.infer<typeof ItemPedidoSchema>;
 // SCHEMA: Filtro de listagem de pedidos (rota admin)
 // =============================================================================
 export const ListarPedidosQuerySchema = z.object({
-  status: z
-    .enum(["pendente", "pago", "enviado", "finalizado", "cancelado"])
-    .optional(),
+  status: z.preprocess(
+    (v) => {
+      const x = primeiroQuery(v);
+      if (x === undefined || x === null || x === "") return undefined;
+      return String(x);
+    },
+    z
+      .enum(["pendente", "pago", "enviado", "finalizado", "cancelado"], {
+        invalid_type_error: "Status de filtro inválido",
+      })
+      .optional(),
+  ),
 });
 
 // =============================================================================

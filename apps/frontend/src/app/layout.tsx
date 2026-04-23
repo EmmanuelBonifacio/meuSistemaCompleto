@@ -9,6 +9,7 @@
 
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { cn } from "@/lib/utils";
 import "./globals.css";
 
 // Configura a fonte Inter com subconjunto Latin e a expõe como variável CSS
@@ -35,10 +36,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html
+      lang="pt-BR"
+      className={inter.variable}
+      suppressHydrationWarning
+    >
       {/* suppressHydrationWarning evita warnings causados por extensões do browser */}
       <body
-        className={`${inter.variable} overflow-x-hidden font-sans antialiased`}
+        className={cn(
+          inter.className,
+          "min-h-screen overflow-x-hidden font-sans antialiased bg-background text-foreground",
+        )}
       >
         {children}
       </body>

@@ -166,7 +166,8 @@ function resolveLogoUrl(url: string | null): string | null {
 }
 
 export default function VendasPage() {
-  const params = useParams<{ slug: string }>();
+  const params = useParams<{ slug: string | string[] }>();
+  const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
   const [produtos, setProdutos] = useState<ProdutoVenda[]>([]);
   const [busca, setBusca] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -191,22 +192,31 @@ export default function VendasPage() {
     setIsOpen: setIsCartOpen,
   } = useCart();
 
+  const carrinhoBadgeContagem =
+    totalItens > 99
+      ? "99+"
+      : Number.isInteger(totalItens)
+        ? String(totalItens)
+        : totalItens.toFixed(1).replace(/\.0$/, "");
+
   // Carrega produtos
   useEffect(() => {
-    listProdutosCatalogo({ limit: 200, slug: params.slug })
+    if (!slug) return;
+    listProdutosCatalogo({ limit: 200, slug })
       .then((res) => setProdutos(res.data))
       .catch((err) =>
         console.error("[VendasPage] Erro ao carregar produtos:", err),
       )
       .finally(() => setIsLoading(false));
-  }, [params.slug]);
+  }, [slug]);
 
   // Carrega configurações da loja
   useEffect(() => {
-    getVendasConfig(params.slug)
+    if (!slug) return;
+    getVendasConfig(slug)
       .then((cfg) => {
         if (cfg.whatsapp_number) setWhatsappNumber(cfg.whatsapp_number);
-        setNomeLoja(cfg.nome_loja || cfg.tenant_name || params.slug);
+        setNomeLoja(cfg.nome_loja || cfg.tenant_name || slug);
         if (cfg.logo_url) setLogoUrl(cfg.logo_url);
         if (cfg.categorias && cfg.categorias.length > 0) {
           // Garante que "lancamentos" é sempre o primeiro
@@ -216,8 +226,8 @@ export default function VendasPage() {
           setOrdemCategorias(["lancamentos", ...semLancamentos]);
         }
       })
-      .catch(() => setNomeLoja(params.slug));
-  }, [params.slug]);
+      .catch(() => setNomeLoja(slug));
+  }, [slug]);
 
   // Extrai paleta de cores da logo
   useEffect(() => {
@@ -257,7 +267,20 @@ export default function VendasPage() {
     return mapa;
   }, [produtos, busca, ordemCategorias]);
 
-  const categoriasDisponiveis = Array.from(produtosPorCategoria.keys());
+  /** Ordem das filas na vitrine = mesma da config salva (opção A); categorias extra no fim. */
+  const fileirasOrdenadas = useMemo(() => {
+    const entries = Array.from(produtosPorCategoria.entries());
+    const rank = new Map<string, number>();
+    ordemCategorias.forEach((c, i) => rank.set(c, i));
+    return entries.sort((a, b) => {
+      const ra = rank.has(a[0]) ? rank.get(a[0])! : 10000;
+      const rb = rank.has(b[0]) ? rank.get(b[0])! : 10000;
+      if (ra !== rb) return ra - rb;
+      return a[0].localeCompare(b[0], "pt-BR");
+    });
+  }, [produtosPorCategoria, ordemCategorias]);
+
+  const categoriasDisponiveis = fileirasOrdenadas.map(([c]) => c);
   const semResultados = busca.length > 0 && produtosPorCategoria.size === 0;
   const logoFullUrl = resolveLogoUrl(logoUrl);
 
@@ -298,7 +321,7 @@ export default function VendasPage() {
               </div>
             )}
             <span className="font-bold text-gray-900 text-lg tracking-tight hidden sm:block">
-              {nomeLoja || params.slug}
+              {nomeLoja || slug}
             </span>
           </div>
 
@@ -319,7 +342,7 @@ export default function VendasPage() {
           {/* BotÃ£o do Carrinho */}
           <button
             onClick={() => setIsCartOpen(true)}
-            aria-label={`Carrinho (${totalItens} itens)`}
+            aria-label={`Carrinho (${carrinhoBadgeContagem} itens)`}
             className="relative flex items-center justify-center p-2.5 rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0"
           >
             <ShoppingCart className="w-5 h-5 text-gray-700" />
@@ -328,7 +351,7 @@ export default function VendasPage() {
                 className="absolute -top-1 -right-1 min-w-5 h-5 px-1 text-white text-xs font-bold rounded-full flex items-center justify-center leading-none"
                 style={{ backgroundColor: paleta.primaria }}
               >
-                {totalItens > 99 ? "99+" : totalItens}
+                {carrinhoBadgeContagem}
               </span>
             )}
           </button>
@@ -507,7 +530,7 @@ export default function VendasPage() {
         {/* Fileiras de categorias */}
         {!isLoading && !semResultados && (
           <div className="divide-y divide-gray-100">
-            {Array.from(produtosPorCategoria.entries()).map(
+            {fileirasOrdenadas.map(
               ([categoria, produtosDaCategoria]) => (
                 <div
                   key={categoria}
@@ -569,7 +592,7 @@ export default function VendasPage() {
             </div>
           )}
           <p className="font-bold text-gray-800 text-lg">
-            {nomeLoja || params.slug}
+            {nomeLoja || slug}
           </p>
           <p className="text-sm text-gray-400 max-w-xs">
             Compras seguras e cômodas via WhatsApp.
@@ -601,7 +624,7 @@ export default function VendasPage() {
         itens={itens}
         totalValor={totalValor}
         whatsappNumber={whatsappNumber}
-        slug={params.slug}
+        slug={slug ?? ""}
         onAtualizarQuantidade={atualizarQuantidade}
         onRemoverItem={removerItem}
         onLimparCarrinho={limparCarrinho}

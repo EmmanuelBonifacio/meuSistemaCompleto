@@ -31,11 +31,26 @@ import {
   Tag,
 } from "lucide-react";
 import Image from "next/image";
-import type {
-  ProdutoVenda,
-  PedidoVenda,
-  ResumoVendas,
+import {
+  CATEGORIAS_LABEL,
+  type PedidoVenda,
+  type ProdutoVenda,
+  type ResumoVendas,
 } from "@/types/vendas.types";
+import {
+  listProdutosAdmin,
+  listPedidos,
+  getResumo,
+  deleteProduto,
+  getVendasConfig,
+  updateVendasConfig,
+  uploadLogoVendas,
+  removeLogoVendas,
+} from "@/services/vendas.service";
+import { formatBrl } from "@/lib/format-ptbr";
+import { ProductModal } from "./ProductModal";
+import { OrdersTable } from "./OrdersTable";
+import { CategoriasConfigSortable } from "./CategoriasConfigSortable";
 
 // Raiz do backend — imagens são servidas por ele, não pelo frontend
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -52,19 +67,6 @@ function resolveImageUrl(url: string | null | undefined): string | null {
     return url;
   return `${API_BASE}${url}`;
 }
-import { CATEGORIAS_LABEL } from "@/types/vendas.types";
-import {
-  listProdutosAdmin,
-  listPedidos,
-  getResumo,
-  deleteProduto,
-  getVendasConfig,
-  updateVendasConfig,
-  uploadLogoVendas,
-  removeLogoVendas,
-} from "@/services/vendas.service";
-import { ProductModal } from "./ProductModal";
-import { OrdersTable } from "./OrdersTable";
 
 // =============================================================================
 // COMPONENTE: MetricCard (card de KPI)
@@ -125,8 +127,7 @@ export function VendasDashboard() {
   const [msgSucesso, setMsgSucesso] = useState<string | null>(null);
   const [msgErro, setMsgErro] = useState<string | null>(null);
 
-  const formatarMoeda = (valor: number) =>
-    valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatarMoeda = (valor: number) => formatBrl(valor);
 
   // -------------------------------------------------------------------------
   // Carrega todos os dados do dashboard
@@ -525,7 +526,10 @@ export function VendasDashboard() {
                 </label>
                 <p className="text-xs text-gray-500">
                   &quot;Lançamentos&quot; é fixa e sempre aparece primeiro.
-                  Adicione outras seções que deseja exibir na vitrine.
+                  Adicione outras seções. Arraste pelo tracinho (ícone de
+                  pegar) em cada categoria para mudar a ordem das{" "}
+                  <strong>filas na loja pública</strong> (clique em Salvar
+                  abaixo).
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -553,44 +557,26 @@ export function VendasDashboard() {
                     <span className="hidden sm:inline">Adicionar</span>
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {/* Pill fixo de Lançamentos — não pode ser removido */}
-                  <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 text-amber-700 text-sm font-semibold px-3 py-1.5 rounded-full">
-                    <Tag className="w-3 h-3 flex-shrink-0" />
-                    Lançamentos
-                    <span className="ml-1 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">
-                      fixo
-                    </span>
-                  </span>
-                  {categorias
-                    .filter((c) => c !== "lancamentos")
-                    .map((cat) => (
-                      <span
-                        key={cat}
-                        className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
-                      >
-                        <Tag className="w-3 h-3 flex-shrink-0" />
-                        {cat}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCategorias((prev) =>
-                              prev.filter((c) => c !== cat),
-                            )
-                          }
-                          className="hover:text-red-600 transition-colors ml-0.5"
-                          aria-label={`Remover categoria ${cat}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 text-amber-700 text-sm font-semibold px-3 py-1.5 rounded-full">
+                      <Tag className="w-3 h-3 flex-shrink-0" />
+                      Lançamentos
+                      <span className="ml-1 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">
+                        fixo
                       </span>
-                    ))}
-                  {categorias.filter((c) => c !== "lancamentos").length ===
-                    0 && (
-                    <p className="text-xs text-gray-400 italic self-center">
-                      Adicione outras categorias acima.
-                    </p>
-                  )}
+                    </span>
+                    <CategoriasConfigSortable
+                      categorias={categorias}
+                      setCategorias={setCategorias}
+                    />
+                    {categorias.filter((c) => c !== "lancamentos").length ===
+                      0 && (
+                      <p className="text-xs text-gray-400 italic self-center w-full sm:w-auto">
+                        Adicione outras categorias acima.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -632,7 +618,7 @@ export function VendasDashboard() {
                   <Package className="w-12 h-12 mx-auto mb-3 text-gray-200" />
                   <p className="font-medium">Nenhum produto cadastrado</p>
                   <p className="text-sm mt-1">
-                    Clique em "Adicionar Produto" para começar
+                    Clique em &apos;Adicionar Produto&apos; para começar
                   </p>
                 </div>
               ) : (
@@ -685,6 +671,11 @@ export function VendasDashboard() {
                                 <div>
                                   <p className="font-medium text-gray-900">
                                     {produto.nome}
+                                    {produto.vendido_por_peso && (
+                                      <span className="ml-1.5 text-[10px] font-bold uppercase text-amber-700">
+                                        /kg
+                                      </span>
+                                    )}
                                   </p>
                                   {produto.destaque && (
                                     <span className="text-xs text-indigo-600 font-medium">
@@ -714,6 +705,9 @@ export function VendasDashboard() {
                                 <p className="font-semibold text-gray-900">
                                   {formatarMoeda(produto.preco)}
                                 </p>
+                              )}
+                              {produto.vendido_por_peso && (
+                                <p className="text-[10px] text-gray-400 mt-0.5">por kg</p>
                               )}
                             </td>
                             {/* Status ativo/inativo */}
@@ -808,6 +802,11 @@ export function VendasDashboard() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-900 text-sm truncate">
                             {produto.nome}
+                            {produto.vendido_por_peso && (
+                              <span className="ml-1 text-[10px] font-bold uppercase text-amber-700">
+                                /kg
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {CATEGORIAS_LABEL[produto.categoria] ??

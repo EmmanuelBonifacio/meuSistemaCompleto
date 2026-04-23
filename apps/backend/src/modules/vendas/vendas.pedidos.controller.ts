@@ -11,6 +11,7 @@
 //   POST   /vendas/webhook/whatsapp → webhookWhatsApp     (público — Evolution API)
 // =============================================================================
 
+import { timingSafeEqual } from "crypto";
 import { FastifyRequest, FastifyReply } from "fastify";
 import {
   CriarPedidoSchema,
@@ -20,6 +21,17 @@ import {
 } from "./vendas.schema";
 import * as pedidosRepository from "./vendas.pedidos.repository";
 import { processarWebhookWhatsApp } from "./vendas.whatsapp.service";
+
+function tokenWebhookConfere(
+  recebido: string | undefined,
+  esperado: string,
+): boolean {
+  if (recebido === undefined) return false;
+  const a = Buffer.from(recebido, "utf8");
+  const b = Buffer.from(esperado, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 // =============================================================================
 // HANDLER: Criar Pedido via WhatsApp (chamado pelo frontend ao clicar no link)
@@ -136,6 +148,24 @@ export async function webhookWhatsApp(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
+  const tokenEsperado = process.env.EVOLUTION_WEBHOOK_TOKEN;
+  if (tokenEsperado) {
+    const header =
+      (typeof request.headers["x-webhook-token"] === "string"
+        ? request.headers["x-webhook-token"]
+        : undefined) ??
+      (request.headers.authorization?.startsWith("Bearer ")
+        ? request.headers.authorization.slice(7)
+        : undefined);
+    if (!tokenWebhookConfere(header, tokenEsperado)) {
+      return reply.status(401).send({
+        statusCode: 401,
+        error: "Não Autorizado",
+        message: "Token de webhook inválido ou ausente.",
+      });
+    }
+  }
+
   // Processa de forma assíncrona sem bloquear o response.
   // A Evolution API espera um 200 rápido — processamento pesado vai em fila.
   processarWebhookWhatsApp(request.body).catch((err) => {

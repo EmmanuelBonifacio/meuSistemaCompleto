@@ -31,6 +31,8 @@ export interface ProdutoVenda {
   ativo: boolean;
   destaque: boolean;
   ordem: number;
+  /** Preço = R$ por 1 kg quando true */
+  vendido_por_peso: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -69,9 +71,14 @@ async function ensureVendasTables(schemaName: string): Promise<void> {
         ativo             BOOLEAN       NOT NULL DEFAULT true,
         destaque          BOOLEAN       NOT NULL DEFAULT false,
         ordem             INTEGER       NOT NULL DEFAULT 0,
+        vendido_por_peso  BOOLEAN       NOT NULL DEFAULT false,
         created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
         updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
       )
+    `);
+    await tx.$executeRawUnsafe(`
+      ALTER TABLE "${schemaName}".venda_produtos
+        ADD COLUMN IF NOT EXISTS vendido_por_peso BOOLEAN NOT NULL DEFAULT false
     `);
     await tx.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS idx_venda_produtos_catalogo
@@ -145,7 +152,8 @@ export async function findAllProdutosVenda(
     values.push(limit, offset);
     const produtos = await tx.$queryRawUnsafe<ProdutoVenda[]>(
       `SELECT id, nome, descricao, preco::float, preco_promocional::float,
-              categoria, foto_url, ativo, destaque, ordem, created_at, updated_at
+              categoria, foto_url, ativo, destaque, ordem, vendido_por_peso,
+              created_at, updated_at
        FROM venda_produtos
        ${whereClause}
        ORDER BY destaque DESC, categoria ASC, ordem ASC, nome ASC
@@ -182,7 +190,8 @@ export async function findProdutoVendaById(
   return withTenantSchema(schemaName, async (tx) => {
     const results = await tx.$queryRaw<ProdutoVenda[]>`
       SELECT id, nome, descricao, preco::float, preco_promocional::float,
-             categoria, foto_url, ativo, destaque, ordem, created_at, updated_at
+             categoria, foto_url, ativo, destaque, ordem, vendido_por_peso,
+             created_at, updated_at
       FROM venda_produtos
       WHERE id = ${id}::uuid
       LIMIT 1
@@ -203,7 +212,7 @@ export async function createProdutoVenda(
     const results = await tx.$queryRaw<ProdutoVenda[]>`
       INSERT INTO venda_produtos
         (nome, descricao, preco, preco_promocional, categoria,
-         foto_url, ativo, destaque, ordem)
+         foto_url, ativo, destaque, ordem, vendido_por_peso)
       VALUES (
         ${data.nome},
         ${data.descricao ?? null},
@@ -213,10 +222,12 @@ export async function createProdutoVenda(
         ${data.foto_url ?? null},
         ${data.ativo ?? true},
         ${data.destaque ?? false},
-        ${data.ordem ?? 0}
+        ${data.ordem ?? 0},
+        ${data.vendido_por_peso ?? false}
       )
       RETURNING id, nome, descricao, preco::float, preco_promocional::float,
-                categoria, foto_url, ativo, destaque, ordem, created_at, updated_at
+                categoria, foto_url, ativo, destaque, ordem, vendido_por_peso,
+                created_at, updated_at
     `;
     // RETURNING — evita um segundo SELECT após o INSERT
     return results[0];
@@ -248,6 +259,7 @@ export async function updateProdutoVenda(
     ativo: data.ativo,
     destaque: data.destaque,
     ordem: data.ordem,
+    vendido_por_peso: data.vendido_por_peso,
   };
 
   for (const [col, val] of Object.entries(fieldMap)) {
@@ -271,7 +283,8 @@ export async function updateProdutoVenda(
        SET ${setClauses.join(", ")}
        WHERE id = $${idIndex}::uuid
        RETURNING id, nome, descricao, preco::float, preco_promocional::float,
-                 categoria, foto_url, ativo, destaque, ordem, created_at, updated_at`,
+                 categoria, foto_url, ativo, destaque, ordem, vendido_por_peso,
+                 created_at, updated_at`,
       ...values,
     );
     return results[0] ?? null;
@@ -293,7 +306,8 @@ export async function deleteProdutoVenda(
       DELETE FROM venda_produtos
       WHERE id = ${id}::uuid
       RETURNING id, nome, descricao, preco::float, preco_promocional::float,
-                categoria, foto_url, ativo, destaque, ordem, created_at, updated_at
+                categoria, foto_url, ativo, destaque, ordem, vendido_por_peso,
+                created_at, updated_at
     `;
     return results[0] ?? null;
   });
@@ -315,7 +329,8 @@ export async function updateFotoProdutoVenda(
       SET foto_url = ${fotoUrl}, updated_at = NOW()
       WHERE id = ${id}::uuid
       RETURNING id, nome, descricao, preco::float, preco_promocional::float,
-                categoria, foto_url, ativo, destaque, ordem, created_at, updated_at
+                categoria, foto_url, ativo, destaque, ordem, vendido_por_peso,
+                created_at, updated_at
     `;
     return results[0] ?? null;
   });

@@ -26,7 +26,7 @@ function getBearerToken(authorizationHeader: string | null): string | null {
 }
 
 export async function auth(): Promise<SessionData | null> {
-  const requestHeaders = headers();
+  const requestHeaders = await headers();
   const token = getBearerToken(
     requestHeaders.get("authorization") ?? requestHeaders.get("Authorization"),
   );

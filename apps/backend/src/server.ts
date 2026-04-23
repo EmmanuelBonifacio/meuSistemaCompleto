@@ -12,7 +12,8 @@
 //   apenas buildServer() sem iniciar o servidor de fato.
 // =============================================================================
 
-import Fastify from "fastify";
+import Fastify, { type FastifyError } from "fastify";
+import { ZodError } from "zod";
 import fastifyJwt from "@fastify/jwt";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
@@ -158,6 +159,7 @@ async function buildServer() {
       "Content-Type",
       "Accept",
       "X-Requested-With",
+      "X-Webhook-Token",
     ],
     exposedHeaders: ["Content-Disposition"],
   });
@@ -176,11 +178,11 @@ async function buildServer() {
   // a aplicação está viva e pronta para receber tráfego.
   // --------------------------------------------------------------------------
   app.get("/health", async () => {
-    return {
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-    };
+    const base = { status: "ok" as const, timestamp: new Date().toISOString() };
+    if (process.env.NODE_ENV === "production") {
+      return base;
+    }
+    return { ...base, environment: process.env.NODE_ENV };
   });
 
   // --------------------------------------------------------------------------
@@ -441,6 +443,42 @@ async function buildServer() {
       });
     });
   }
+
+  // Zod → 400. Erros 5xx em produção: resposta genérica; detalhe só no log (não vaza para o cliente).
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof ZodError) {
+      request.log.warn(
+        { issues: error.issues },
+        "Requisição rejeitada: validação Zod",
+      );
+      return reply.status(400).send({
+        statusCode: 400,
+        error: "Bad Request",
+        message: "Dados de entrada inválidos.",
+        issues: error.issues,
+      });
+    }
+
+    const statusCode = (error as FastifyError).statusCode ?? 500;
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, (error as Error).message);
+    } else {
+      request.log.info({ err: error }, (error as Error).message);
+    }
+
+    if (
+      statusCode >= 500 &&
+      process.env.NODE_ENV === "production"
+    ) {
+      return reply.status(500).send({
+        statusCode: 500,
+        error: "Internal Server Error",
+        message: "Erro interno do servidor.",
+      });
+    }
+
+    reply.send(error);
+  });
 
   return app;
 }

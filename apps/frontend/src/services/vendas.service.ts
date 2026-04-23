@@ -153,6 +153,7 @@ export async function createPedido(dados: {
         nome: item.nome,
         preco: item.preco,
         quantidade: item.quantidade,
+        vendido_por_peso: item.vendido_por_peso ?? false,
       })),
       total: dados.total,
       numero_whatsapp: dados.numero_whatsapp ?? null,

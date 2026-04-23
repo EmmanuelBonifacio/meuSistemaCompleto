@@ -41,6 +41,8 @@ export interface ProdutoVenda {
   ativo: boolean;
   destaque: boolean;
   ordem: number;
+  /** true = preço é por 1 kg */
+  vendido_por_peso: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +70,7 @@ export interface ProdutoVendaInput {
   ativo?: boolean;
   destaque?: boolean;
   ordem?: number;
+  vendido_por_peso?: boolean;
 }
 
 // =============================================================================
@@ -77,8 +80,10 @@ export interface ItemCarrinho {
   produto_id: string;
   nome: string;
   preco: number;
+  /** Unidades (inteiro) ou kg (decimal) se vendido_por_peso */
   quantidade: number;
   foto_url: string | null;
+  vendido_por_peso: boolean;
 }
 
 // =============================================================================

@@ -27,17 +27,20 @@ export default function TenantLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const params = useParams<{ slug: string }>();
-  const slug = params.slug;
-  const pathname = usePathname();
+  const params = useParams<{ slug: string | string[] }>();
+  const slug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
+  // usePathname() pode ser null no primeiro tick em alguns fluxos do App Router
+  const pathname = usePathname() ?? "";
+  const base = slug ? `/${slug}` : "";
 
   // Rota de login não precisa de proteção — o usuário ainda não tem token
-  const isLoginPage = pathname === `/${slug}/login`;
+  const isLoginPage = !!slug && pathname === `${base}/login`;
 
   // Catálogo público de vendas — sem autenticação (exceto /vendas/admin que tem seu próprio layout)
   const isVendasPublica =
-    pathname.startsWith(`/${slug}/vendas`) &&
-    !pathname.startsWith(`/${slug}/vendas/admin`);
+    !!slug &&
+    pathname.startsWith(`${base}/vendas`) &&
+    !pathname.startsWith(`${base}/vendas/admin`);
 
   // Estado de verificação de auth: null = checando, true = ok, false = sem auth
   const [authState, setAuthState] = useState<"checking" | "ok" | "redirect">(
@@ -75,7 +78,15 @@ export default function TenantLayout({
     // /dashboard. Quando o usuário faz login e a rota muda de /login → /dashboard,
     // isLoginPage muda de true → false. Sem ele aqui, o effect não re-executa
     // e authState fica em "checking" para sempre (spinner infinito).
-  }, [slug, router, isLoginPage]);
+  }, [slug, router, isLoginPage, isVendasPublica]);
+
+  if (slug == null || slug === "") {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   // Tela em branco durante a verificação (evita flash de conteúdo protegido).
   // Na página de login e nas páginas públicas de vendas não exibe spinner — renderiza os filhos diretamente.
