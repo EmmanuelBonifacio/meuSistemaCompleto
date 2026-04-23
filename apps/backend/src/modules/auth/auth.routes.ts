@@ -47,8 +47,23 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   // ==========================================================================
   // Rota PÚBLICA — o cliente não tem access_token válido quando chega aqui
   // (o access_token expirou). A verificação é feita pelo refresh token.
+  //
+  // RATE LIMIT ESPECÍFICO: 30 tentativas por minuto por IP.
+  // Menos restritivo que o login (tokens expiram com frequência), mas ainda
+  // protege contra força bruta em refresh tokens comprometidos.
   // ==========================================================================
-  fastify.post("/refresh", refresh);
+  fastify.post(
+    "/refresh",
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: "1 minute",
+        },
+      },
+    },
+    refresh,
+  );
 
   // ==========================================================================
   // ROTA: POST /auth/logout

@@ -61,6 +61,9 @@ async function buildServer() {
           ? { target: "pino-pretty" } // Logs coloridos no terminal em dev
           : undefined, // JSON puro em produção
     },
+    // Limite de 5MB para o body das requisições (proteção contra DoS via payload gigante).
+    // Requisições acima disso retornam 413 Request Entity Too Large automaticamente.
+    bodyLimit: 5 * 1024 * 1024,
   });
 
   // ---------------------------------------------------------------------------
@@ -466,10 +469,7 @@ async function buildServer() {
       request.log.info({ err: error }, (error as Error).message);
     }
 
-    if (
-      statusCode >= 500 &&
-      process.env.NODE_ENV === "production"
-    ) {
+    if (statusCode >= 500 && process.env.NODE_ENV === "production") {
       return reply.status(500).send({
         statusCode: 500,
         error: "Internal Server Error",
