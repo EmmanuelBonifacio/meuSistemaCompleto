@@ -158,9 +158,7 @@ export function ProductModal({
     }
     // Trava de segurança: não permite ativar um produto sem categoria válida
     if (form.ativo && categoriaInvalida) {
-      setErro(
-        "Selecione uma categoria válida antes de ativar o produto.",
-      );
+      setErro("Selecione uma categoria válida antes de ativar o produto.");
       return;
     }
 
@@ -454,9 +452,9 @@ export function ProductModal({
             </label>
             {categoriaInvalida && (
               <div className="flex items-center gap-1.5 mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                A categoria &quot;{form.categoria}&quot; foi removida. Selecione
-                outra antes de ativar o produto.
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />A categoria
+                &quot;{form.categoria}&quot; foi removida. Selecione outra antes
+                de ativar o produto.
               </div>
             )}
             <select
@@ -502,7 +500,9 @@ export function ProductModal({
           <div className="flex gap-6">
             <label
               className={`flex items-center gap-2 ${
-                categoriaInvalida ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                categoriaInvalida
+                  ? "cursor-not-allowed opacity-60"
+                  : "cursor-pointer"
               }`}
               title={
                 categoriaInvalida

@@ -228,7 +228,9 @@ export function ProductCard({
                     : normalizarUnidade(qtd + 1),
                 )
               }
-              disabled={porPeso ? quantidade >= MAX_KG : quantidade >= MAX_QUANTIDADE}
+              disabled={
+                porPeso ? quantidade >= MAX_KG : quantidade >= MAX_QUANTIDADE
+              }
               className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-8 sm:h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 active:bg-gray-200 disabled:hover:bg-transparent disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
               aria-label={porPeso ? "Aumentar peso" : "Aumentar quantidade"}
             >

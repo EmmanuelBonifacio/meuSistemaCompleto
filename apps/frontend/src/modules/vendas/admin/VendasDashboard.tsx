@@ -534,8 +534,8 @@ export function VendasDashboard() {
                 </label>
                 <p className="text-xs text-gray-500">
                   &quot;Lançamentos&quot; é fixa e sempre aparece primeiro.
-                  Adicione outras seções. Arraste pelo tracinho (ícone de
-                  pegar) em cada categoria para mudar a ordem das{" "}
+                  Adicione outras seções. Arraste pelo tracinho (ícone de pegar)
+                  em cada categoria para mudar a ordem das{" "}
                   <strong>filas na loja pública</strong> (clique em Salvar
                   abaixo).
                 </p>
@@ -720,7 +720,9 @@ export function VendasDashboard() {
                                 </p>
                               )}
                               {produto.vendido_por_peso && (
-                                <p className="text-[10px] text-gray-400 mt-0.5">por kg</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                  por kg
+                                </p>
                               )}
                             </td>
                             {/* Status ativo/inativo */}

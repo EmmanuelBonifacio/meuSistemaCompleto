@@ -113,10 +113,8 @@ function intPositivoComDefault(
   max: number,
 ): number {
   const raw = primeiroQuery(v);
-  if (raw === undefined || raw === null || raw === "")
-    return padrao;
-  const n =
-    typeof raw === "number" ? raw : parseInt(String(raw).trim(), 10);
+  if (raw === undefined || raw === null || raw === "") return padrao;
+  const n = typeof raw === "number" ? raw : parseInt(String(raw).trim(), 10);
   if (!Number.isFinite(n) || n < 1) return padrao;
   return Math.min(max, n);
 }
@@ -145,23 +143,17 @@ export function isValidPublicTenantSlug(slug: string): boolean {
 // SCHEMA: Query string para listagem do catálogo (rota pública)
 // =============================================================================
 export const ListarProdutosVendaQuerySchema = z.object({
-  categoria: z.preprocess(
-    (v) => {
-      const x = primeiroQuery(v);
-      if (x === undefined || x === null) return undefined;
-      return String(x).trim() || undefined;
-    },
-    z.string().max(50).optional(),
-  ),
+  categoria: z.preprocess((v) => {
+    const x = primeiroQuery(v);
+    if (x === undefined || x === null) return undefined;
+    return String(x).trim() || undefined;
+  }, z.string().max(50).optional()),
 
-  busca: z.preprocess(
-    (v) => {
-      const x = primeiroQuery(v);
-      if (x === undefined || x === null) return undefined;
-      return String(x).trim() || undefined;
-    },
-    z.string().max(100).optional(),
-  ),
+  busca: z.preprocess((v) => {
+    const x = primeiroQuery(v);
+    if (x === undefined || x === null) return undefined;
+    return String(x).trim() || undefined;
+  }, z.string().max(100).optional()),
 
   page: z.preprocess(
     (v) => intPositivoComDefault(v, 1, 1_000_000),
@@ -174,14 +166,11 @@ export const ListarProdutosVendaQuerySchema = z.object({
   ),
 
   // slug é consumido pelo publicTenantResolver antes do handler; ignorado aqui
-  slug: z.preprocess(
-    (v) => {
-      const x = primeiroQuery(v);
-      if (x === undefined || x === null) return undefined;
-      return String(x) || undefined;
-    },
-    z.string().optional(),
-  ),
+  slug: z.preprocess((v) => {
+    const x = primeiroQuery(v);
+    if (x === undefined || x === null) return undefined;
+    return String(x) || undefined;
+  }, z.string().optional()),
 });
 
 // =============================================================================
