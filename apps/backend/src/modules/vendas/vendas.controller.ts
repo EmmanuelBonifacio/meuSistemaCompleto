@@ -335,6 +335,38 @@ export async function updateVendasConfig(
 
   await withTenantSchema(schemaName, async (tx) => {
     await ensureVendaConfig(schemaName, tx);
+
+    // Se novas categorias foram enviadas, detecta quais foram removidas e
+    // desativa automaticamente os produtos que estavam nessas categorias.
+    // Isso garante que produtos não apareçam na loja sem categoria válida.
+    if (Array.isArray(categorias)) {
+      const configAtual = await tx.$queryRawUnsafe<
+        { categorias: string | null }[]
+      >(`SELECT categorias FROM "${schemaName}".venda_config WHERE id = 1`);
+
+      let categoriasAnteriores: string[] = [];
+      try {
+        const raw = configAtual[0]?.categorias;
+        if (raw) categoriasAnteriores = JSON.parse(raw) as string[];
+      } catch {
+        // JSON inválido no banco — ignora e trata como lista vazia
+      }
+
+      const categoriasRemovidas = categoriasAnteriores.filter(
+        (c) => !(categorias as string[]).includes(c),
+      );
+
+      // Para cada categoria removida, desativa todos os produtos activos nela
+      for (const cat of categoriasRemovidas) {
+        await tx.$queryRawUnsafe(
+          `UPDATE "${schemaName}".venda_produtos
+             SET ativo = false, updated_at = NOW()
+           WHERE categoria = $1 AND ativo = true`,
+          cat,
+        );
+      }
+    }
+
     await tx.$queryRawUnsafe(
       `UPDATE "${schemaName}".venda_config
          SET whatsapp_number = $1,

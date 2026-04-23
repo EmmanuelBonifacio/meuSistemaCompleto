@@ -329,8 +329,9 @@ export const AtualizarVendasConfigSchema = z.object({
 
   // Categorias personalizadas definidas pelo tenant no painel admin.
   // Armazenadas como JSON no banco. Ex: ["Roupas", "Calçados", "Acessórios"]
+  // max(60) alinhado ao limite do CriarProdutoVendaSchema.categoria
   categorias: z
-    .array(z.string().min(1).max(50).trim())
+    .array(z.string().min(1).max(60).trim())
     .max(20, "Máximo de 20 categorias")
     .optional()
     .nullable(),

@@ -135,11 +135,19 @@ export function VendasDashboard() {
   const carregarDados = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Cada chamada tem seu próprio .catch() para que uma falha isolada
+      // não impeça as outras (especialmente a de config/categorias) de rodar.
       const [produtosRes, pedidosRes, resumoRes, configRes] = await Promise.all(
         [
-          listProdutosAdmin(),
-          listPedidos(),
-          getResumo(),
+          listProdutosAdmin().catch(() => ({
+            data: [] as ProdutoVenda[],
+            total: 0,
+            page: 1,
+            limit: 50,
+            totalPages: 0,
+          })),
+          listPedidos().catch(() => ({ pedidos: [] as PedidoVenda[] })),
+          getResumo().catch(() => null),
           getVendasConfig().catch(() => ({
             whatsapp_number: null,
             nome_loja: null,
@@ -151,7 +159,7 @@ export function VendasDashboard() {
       );
       setProdutos(produtosRes.data);
       setPedidos(pedidosRes.pedidos);
-      setResumo(resumoRes);
+      if (resumoRes) setResumo(resumoRes);
       setConfig({
         whatsapp_number: configRes.whatsapp_number ?? "",
         nome_loja: configRes.nome_loja ?? "",
@@ -589,6 +597,11 @@ export function VendasDashboard() {
                       categorias,
                     });
                     mostrarSucesso("Configurações salvas com sucesso!");
+                    // Recarrega produtos em background: o backend pode ter
+                    // desativado produtos cujas categorias foram removidas.
+                    listProdutosAdmin()
+                      .then((res) => setProdutos(res.data))
+                      .catch(() => {});
                   } catch (err) {
                     const msg =
                       err instanceof Error ? err.message : "Erro ao salvar";
@@ -607,7 +620,6 @@ export function VendasDashboard() {
                 )}
                 Salvar Configurações
               </button>
-            </div>
           )}
 
           {/* ABA: Produtos */}

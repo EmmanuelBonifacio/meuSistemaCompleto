@@ -15,7 +15,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Upload, Loader2, ImageIcon } from "lucide-react";
+import { X, Upload, Loader2, ImageIcon, AlertTriangle } from "lucide-react";
 import Image from "next/image";
 import type {
   ProdutoVenda,
@@ -87,6 +87,15 @@ export function ProductModal({
 
   const isModoEdicao = !!produto;
 
+  // Lista de categorias válidas do tenant (ou fallback nas categorias padrão)
+  const categoriasValidas =
+    categorias && categorias.length > 0
+      ? categorias
+      : Object.keys(CATEGORIAS_LABEL);
+
+  // Verdadeiro quando o produto tem uma categoria que não existe mais na config
+  const categoriaInvalida = !categoriasValidas.includes(form.categoria);
+
   // Preenche o formulário quando em modo edição
   useEffect(() => {
     if (produto) {
@@ -145,6 +154,13 @@ export function ProductModal({
     }
     if (form.preco < 0) {
       setErro("Preço não pode ser negativo.");
+      return;
+    }
+    // Trava de segurança: não permite ativar um produto sem categoria válida
+    if (form.ativo && categoriaInvalida) {
+      setErro(
+        "Selecione uma categoria válida antes de ativar o produto.",
+      );
       return;
     }
 
@@ -436,6 +452,13 @@ export function ProductModal({
             >
               Categoria <span className="text-red-500">*</span>
             </label>
+            {categoriaInvalida && (
+              <div className="flex items-center gap-1.5 mb-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                A categoria &quot;{form.categoria}&quot; foi removida. Selecione
+                outra antes de ativar o produto.
+              </div>
+            )}
             <select
               id="categoria"
               value={form.categoria}
@@ -448,6 +471,18 @@ export function ProductModal({
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-white"
               required
             >
+              {/* Opção desabilitada exibindo a categoria inválida atual */}
+              {categoriaInvalida && (
+                <option value={form.categoria} disabled>
+                  {form.categoria} (removida — selecione outra)
+                </option>
+              )}
+              {/* Opção desabilitada exibindo a categoria inválida atual */}
+              {categoriaInvalida && (
+                <option value={form.categoria} disabled>
+                  {form.categoria} (removida — selecione outra)
+                </option>
+              )}
               {categorias && categorias.length > 0
                 ? categorias.map((cat) => (
                     <option key={cat} value={cat}>
@@ -465,10 +500,20 @@ export function ProductModal({
 
           {/* Checkboxes */}
           <div className="flex gap-6">
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label
+              className={`flex items-center gap-2 ${
+                categoriaInvalida ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+              }`}
+              title={
+                categoriaInvalida
+                  ? "Selecione uma categoria válida para ativar"
+                  : undefined
+              }
+            >
               <input
                 type="checkbox"
                 checked={form.ativo}
+                disabled={categoriaInvalida}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, ativo: e.target.checked }))
                 }
@@ -476,6 +521,11 @@ export function ProductModal({
               />
               <span className="text-sm font-medium text-gray-700">
                 Produto ativo
+                {categoriaInvalida && (
+                  <span className="ml-1 text-xs text-amber-600 font-normal">
+                    (sem categoria válida)
+                  </span>
+                )}
               </span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
