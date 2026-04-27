@@ -70,9 +70,12 @@ const apiInstance: AxiosInstance = axios.create({
 // =============================================================================
 // O QUE FAZ:
 //   Antes de CADA requisição sair do browser, este interceptador:
-//   1. Lê o JWT do localStorage
-//   2. Se encontrar, adiciona ao header Authorization
-//   3. Passa a requisição adiante
+//   1. Se o body for FormData, REMOVE Content-Type para o browser definir
+//      multipart/form-data com boundary (o default application/json da
+//      instância quebrava uploads no Fastify → 400 "Nenhum arquivo enviado").
+//   2. Lê o JWT do localStorage
+//   3. Se encontrar, adiciona ao header Authorization
+//   4. Passa a requisição adiante
 //
 // POR QUE AQUI E NÃO EM CADA CHAMADA?
 //   DRY (Don't Repeat Yourself). Se você tivesse 50 chamadas de API e
@@ -81,6 +84,26 @@ const apiInstance: AxiosInstance = axios.create({
 // =============================================================================
 apiInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      const headers = config.headers;
+      if (headers && typeof headers === "object") {
+        if (
+          "delete" in headers &&
+          typeof (headers as { delete: (name: string) => void }).delete ===
+            "function"
+        ) {
+          (headers as { delete: (name: string) => void }).delete(
+            "Content-Type",
+          );
+        } else {
+          for (const key of Object.keys(headers as Record<string, unknown>)) {
+            if (key.toLowerCase() === "content-type") {
+              delete (headers as Record<string, unknown>)[key];
+            }
+          }
+        }
+      }
+    }
     if (typeof window !== "undefined") {
       // Rotas do painel admin usam o token de superadmin (ADMIN_TOKEN_KEY).
       // Todas as outras rotas usam o token de tenant (TOKEN_KEY).

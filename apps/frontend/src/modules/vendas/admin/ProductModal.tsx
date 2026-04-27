@@ -22,24 +22,11 @@ import type {
   ProdutoVendaInput,
   CategoriaVenda,
 } from "@/types/vendas.types";
-
-// Raiz do backend — imagens são servidas por ele, não pelo frontend
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-
-// Constrói a URL completa para imagens armazenadas como caminhos relativos
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("data:")
-  )
-    return url;
-  return `${API_BASE}${url}`;
-}
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
+import { resolveApiAssetUrl } from "@/lib/resolve-api-asset-url";
 import {
   createProduto,
+  deleteProduto,
   updateProduto,
   uploadFotoProduto,
 } from "@/services/vendas.service";
@@ -116,7 +103,7 @@ export function ProductModal({
         vendido_por_peso: produto.vendido_por_peso ?? false,
       });
       // Resolve a URL para exibição correta — URLs relativas precisam do prefixo do backend
-      setFotoPreview(resolveImageUrl(produto.foto_url));
+      setFotoPreview(resolveApiAssetUrl(produto.foto_url));
     } else {
       setForm(FORM_INICIAL);
       setFotoPreview(null);
@@ -201,11 +188,23 @@ export function ProductModal({
 
       // Se selecionou uma nova foto, faz upload após salvar o produto
       if (arquivoParaUpload) {
-        const { produto: comFoto } = await uploadFotoProduto(
-          produtoSalvo.id,
-          arquivoParaUpload,
-        );
-        produtoSalvo = comFoto;
+        try {
+          const { produto: comFoto } = await uploadFotoProduto(
+            produtoSalvo.id,
+            arquivoParaUpload,
+          );
+          produtoSalvo = comFoto;
+        } catch (uploadErr) {
+          // Criação: evita produto “fantasma” sem foto no catálogo
+          if (!isModoEdicao) {
+            try {
+              await deleteProduto(produtoSalvo.id);
+            } catch {
+              /* rollback best-effort */
+            }
+          }
+          throw uploadErr;
+        }
       }
 
       onSalvo(produtoSalvo);

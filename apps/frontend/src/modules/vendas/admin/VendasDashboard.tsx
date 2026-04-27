@@ -48,25 +48,10 @@ import {
   removeLogoVendas,
 } from "@/services/vendas.service";
 import { formatBrl } from "@/lib/format-ptbr";
+import { resolveApiAssetUrl } from "@/lib/resolve-api-asset-url";
 import { ProductModal } from "./ProductModal";
 import { OrdersTable } from "./OrdersTable";
 import { CategoriasConfigSortable } from "./CategoriasConfigSortable";
-
-// Raiz do backend — imagens são servidas por ele, não pelo frontend
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-
-// Constrói a URL completa para imagens armazenadas como caminhos relativos
-// ex: "/uploads/vendas/xxx.jpg" → "http://localhost:3000/uploads/vendas/xxx.jpg"
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("data:")
-  )
-    return url;
-  return `${API_BASE}${url}`;
-}
 
 // =============================================================================
 // COMPONENTE: MetricCard (card de KPI)
@@ -415,7 +400,7 @@ export function VendasDashboard() {
                 {logoUrl && (
                   <div className="relative w-32 h-32 rounded-2xl border border-gray-200 overflow-hidden bg-gray-50">
                     <Image
-                      src={resolveImageUrl(logoUrl)!}
+                      src={resolveApiAssetUrl(logoUrl)!}
                       alt="Logo da loja"
                       fill
                       className="object-contain p-2"
@@ -670,7 +655,7 @@ export function VendasDashboard() {
                                 <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                                   {produto.foto_url ? (
                                     <Image
-                                      src={resolveImageUrl(produto.foto_url)!}
+                                      src={resolveApiAssetUrl(produto.foto_url)!}
                                       alt={produto.nome}
                                       fill
                                       className="object-cover"
@@ -802,7 +787,7 @@ export function VendasDashboard() {
                         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                           {produto.foto_url ? (
                             <Image
-                              src={resolveImageUrl(produto.foto_url)!}
+                              src={resolveApiAssetUrl(produto.foto_url)!}
                               alt={produto.nome}
                               fill
                               className="object-cover"

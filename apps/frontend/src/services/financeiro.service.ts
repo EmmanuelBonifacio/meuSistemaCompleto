@@ -243,9 +243,6 @@ export async function importBankCsv(
   const response = await api.post<ImportBankCsvResult>(
     "/financeiro/importacoes/extrato-csv",
     form,
-    {
-      headers: { "Content-Type": "multipart/form-data" },
-    },
   );
   return response.data;
 }

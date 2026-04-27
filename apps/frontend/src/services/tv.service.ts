@@ -216,9 +216,6 @@ export async function uploadMedia(file: File): Promise<MediaFile> {
   const response = await api.post<{ mensagem: string; file: MediaFile }>(
     "/tv/media/upload",
     form,
-    // Sem Content-Type explícito: o Axios deixa o browser definir
-    // o boundary do multipart automaticamente.
-    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return response.data.file;
 }

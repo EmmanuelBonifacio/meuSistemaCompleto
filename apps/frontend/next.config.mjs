@@ -8,12 +8,62 @@
 // ATENÇÃO DE SEGURANÇA:
 //   NUNCA coloque segredos (JWT_SECRET, senhas) em variáveis NEXT_PUBLIC.
 //   Elas aparecem no bundle JavaScript do cliente e podem ser inspecionadas.
+//
+// PRODUÇÃO:
+//   NEXT_PUBLIC_API_URL deve existir no build (ex: https://api.seudominio.com.br).
+//   Sem isso, fotos em /uploads/ viram http://localhost no bundle e quebram na vitrine.
+//   Para builds excepcionais: SKIP_PUBLIC_API_URL_CHECK=1
 // =============================================================================
 
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const rawApi = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+const isProdBuild = process.env.NODE_ENV === "production";
+
+if (
+  isProdBuild &&
+  !process.env.SKIP_PUBLIC_API_URL_CHECK &&
+  (!rawApi ||
+    (!rawApi.startsWith("https://") && !rawApi.startsWith("http://")))
+) {
+  throw new Error(
+    "next.config.mjs: em produção, defina NEXT_PUBLIC_API_URL com a URL pública da API " +
+      "(ex: https://api.saasplatform.com.br). Sem isso, imagens de produtos apontam para localhost. " +
+      "Docker: docker build --build-arg NEXT_PUBLIC_API_URL=https://api...",
+  );
+}
+
+const nextPublicApiUrl = rawApi || (isProdBuild ? "" : "http://localhost:3000");
+
+/** @returns {import('next').NextConfig['images']['remotePatterns']} */
+function buildUploadsRemotePatterns() {
+  try {
+    const u = new URL(nextPublicApiUrl);
+    return [
+      {
+        protocol: /** @type {"http" | "https"} */ (
+          u.protocol === "https:" ? "https" : "http"
+        ),
+        hostname: u.hostname,
+        ...(u.port ? { port: u.port } : {}),
+        pathname: "/uploads/**",
+      },
+    ];
+  } catch {
+    return [
+      {
+        protocol: "http",
+        hostname: "localhost",
+        port: "3000",
+        pathname: "/uploads/**",
+      },
+      { protocol: /** @type {"https"} */ ("https"), hostname: "**" },
+    ];
+  }
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -23,49 +73,18 @@ const nextConfig = {
   // Necessário para build Docker com Next.js standalone
   output: "standalone",
 
-  // Passa a URL do backend para o browser via variável pública.
   env: {
-    NEXT_PUBLIC_API_URL:
-      process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000",
+    NEXT_PUBLIC_API_URL: nextPublicApiUrl,
   },
 
-  // Imagens externas (logos de tenants, fotos de produtos, etc.)
-  // PRODUÇÃO: defina NEXT_PUBLIC_API_HOST com o hostname da API (ex: api.seudominio.com.br)
   images: {
-    remotePatterns: [
-      // Desenvolvimento: backend local (http://localhost:3000/uploads/...)
-      {
-        protocol: "http",
-        hostname: "localhost",
-        port: "3000",
-        pathname: "/uploads/**",
-      },
-      // Produção: HTTPS com o hostname configurado em .env
-      ...(process.env.NEXT_PUBLIC_API_HOST
-        ? [
-            {
-              protocol: /** @type {"https"} */ ("https"),
-              hostname: process.env.NEXT_PUBLIC_API_HOST,
-              pathname: "/uploads/**",
-            },
-          ]
-        : [
-            // Fallback permissivo — SUBSTITUA pelo domínio real antes do deploy!
-            {
-              protocol: /** @type {"https"} */ ("https"),
-              hostname: "**",
-            },
-          ]),
-    ],
+    remotePatterns: buildUploadsRemotePatterns(),
   },
 
-  // Opcional: suprimir avisos do ESLint durante builds de produção
   eslint: {
     ignoreDuringBuilds: false,
   },
 
-  // Dev / monorepo: em alguns ambientes o bundle do servidor deixa de encontrar
-  // o chunk vendor de `tailwind-merge`; forçar require no runtime evita o erro.
   serverExternalPackages: ["tailwind-merge"],
 };
 

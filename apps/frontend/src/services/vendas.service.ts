@@ -125,9 +125,7 @@ export async function uploadFotoProduto(
     mensagem: string;
     foto_url: string;
     produto: ProdutoVenda;
-  }>(`/vendas/produtos/${id}/foto`, formData, {
-    headers: { "Content-Type": undefined },
-  });
+  }>(`/vendas/produtos/${id}/foto`, formData);
   return response.data;
 }
 
@@ -250,7 +248,6 @@ export async function uploadLogoVendas(
   const response = await api.post<{ mensagem: string; logo_url: string }>(
     "/vendas/config/logo",
     formData,
-    { headers: { "Content-Type": undefined } },
   );
   return response.data;
 }

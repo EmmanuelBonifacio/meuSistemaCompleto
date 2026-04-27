@@ -27,8 +27,10 @@ COPY . .
 # Garante que a pasta public existe (Next.js exige, mesmo que vazia)
 RUN mkdir -p ./public
 
-# Variáveis NEXT_PUBLIC precisam estar disponíveis em build time
-ARG NEXT_PUBLIC_API_URL=http://localhost:3000
+# NEXT_PUBLIC_* são embutidas no bundle no build. Sem a URL real da API,
+# o cliente usa localhost e fotos em /uploads/ quebram na vitrine.
+# Ex.: docker build --build-arg NEXT_PUBLIC_API_URL=https://api.saasplatform.com.br
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 ARG NEXT_PUBLIC_APP_URL=http://localhost:3001

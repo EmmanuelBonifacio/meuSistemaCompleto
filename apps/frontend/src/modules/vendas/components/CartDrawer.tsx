@@ -23,15 +23,9 @@ import type { ItemCarrinho } from "@/types/vendas.types";
 import { gerarLinkWhatsAppCarrinho } from "@/modules/vendas/lib/whatsapp";
 import { createPedido } from "@/services/vendas.service";
 import { formatBrl, formatQuantidadeKg } from "@/lib/format-ptbr";
+import { resolveApiAssetUrl } from "@/lib/resolve-api-asset-url";
 
-// Resolve URL relativa para absoluta (corrige imagens do carrinho)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const STEP_KG = 0.05;
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${API_BASE}${url}`;
-}
 
 // =============================================================================
 // PROPS
@@ -153,7 +147,7 @@ export function CartDrawer({
               const porPeso = item.vendido_por_peso ?? false;
               const fotoUrl = imagensInvalidas[item.produto_id]
                 ? null
-                : resolveImageUrl(item.foto_url);
+                : resolveApiAssetUrl(item.foto_url);
 
               return (
                 <div

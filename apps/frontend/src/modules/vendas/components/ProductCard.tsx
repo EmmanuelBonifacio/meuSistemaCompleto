@@ -18,6 +18,7 @@ import { Minus, Plus, ShoppingCart, Zap } from "lucide-react";
 import type { ProdutoVenda, ItemCarrinho } from "@/types/vendas.types";
 import { gerarLinkWhatsAppSingle } from "@/modules/vendas/lib/whatsapp";
 import { formatBrl } from "@/lib/format-ptbr";
+import { resolveApiAssetUrl } from "@/lib/resolve-api-asset-url";
 
 // =============================================================================
 // PROPS
@@ -35,8 +36,6 @@ interface ProductCardProps {
 // =============================================================================
 // COMPONENTE: ProductCard
 // =============================================================================
-// Raiz do backend — imagens são servidas por ele, não pelo frontend
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const MAX_QUANTIDADE = 99;
 const MAX_KG = 99;
 const MIN_KG = 0.05;
@@ -44,14 +43,6 @@ const STEP_KG = 0.05;
 
 function arredondarKg(n: number): number {
   return Math.round(n * 100) / 100;
-}
-
-// Constrói a URL completa para imagens armazenadas como caminhos relativos
-// ex: "/uploads/vendas/xxx.jpg" → "http://localhost:3000/uploads/vendas/xxx.jpg"
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${API_BASE}${url}`;
 }
 
 export function ProductCard({
@@ -79,7 +70,7 @@ export function ProductCard({
     produto.preco_promocional < produto.preco;
 
   const formatarPreco = (valor: number) => formatBrl(valor);
-  const fotoUrl = !imagemInvalida ? resolveImageUrl(produto.foto_url) : null;
+  const fotoUrl = !imagemInvalida ? resolveApiAssetUrl(produto.foto_url) : null;
 
   const linkComprar = gerarLinkWhatsAppSingle(
     produto,
