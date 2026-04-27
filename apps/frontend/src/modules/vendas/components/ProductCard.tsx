@@ -117,7 +117,7 @@ export function ProductCard({
             src={fotoUrl}
             alt={produto.nome}
             fill
-            className="object-cover"
+            className="object-contain"
             sizes="(min-width: 1024px) 272px, (min-width: 768px) 240px, 224px"
             unoptimized
             onError={() => setImagemInvalida(true)}
@@ -127,7 +127,7 @@ export function ProductCard({
             src="/images/sem-foto-produto.svg"
             alt="Produto sem foto"
             fill
-            className="object-cover"
+            className="object-contain"
             sizes="(min-width: 1024px) 272px, (min-width: 768px) 240px, 224px"
             unoptimized
           />

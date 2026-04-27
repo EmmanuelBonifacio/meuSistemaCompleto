@@ -6,15 +6,17 @@
 #
 # COMO USAR:
 #   1. Primeira vez: chmod +x deploy.sh   (dá permissão de execução)
-#   2. Para fazer deploy: ./deploy.sh
+#   2. Configure a variável obrigatória abaixo: NEXT_PUBLIC_API_URL
+#   3. Para fazer deploy: ./deploy.sh
 #
 # O QUE ELE FAZ (nesta ordem):
-#   1. Baixa o código novo do GitHub
-#   2. Instala dependências novas (se houver)
-#   3. Roda as migrações do banco de dados
-#   4. Compila o backend (TypeScript → JavaScript)
-#   5. Compila o frontend (Next.js)
-#   6. Reinicia os serviços com PM2
+#   1. Valida variáveis de ambiente obrigatórias
+#   2. Baixa o código novo do GitHub
+#   3. Instala dependências (backend + frontend, incluindo devDeps para o build)
+#   4. Roda as migrações do banco de dados
+#   5. Compila o backend (TypeScript → JavaScript)
+#   6. Compila o frontend (Next.js)
+#   7. Reinicia os serviços com PM2
 # =============================================================================
 
 set -e  # Para tudo se qualquer comando falhar (segurança)
@@ -45,33 +47,50 @@ echo -e "${YELLOW}Iniciado em: $(date '+%d/%m/%Y %H:%M:%S')${NC}"
 echo ""
 
 # ------------------------------------------------------------------------------
-# PASSO 1 — Ir para a pasta do projeto
+# PASSO 1 — Validar variáveis de ambiente obrigatórias
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[1/7] Acessando pasta do projeto...${NC}"
-cd "$PROJECT_DIR"
-echo -e "${GREEN}✓ Pasta: $PROJECT_DIR${NC}"
+echo -e "${BLUE}[1/7] Verificando variáveis de ambiente...${NC}"
+
+if [ -z "${NEXT_PUBLIC_API_URL:-}" ]; then
+  echo -e "${RED}ERRO: NEXT_PUBLIC_API_URL não está definida.${NC}"
+  echo -e "${YELLOW}  Defina antes de rodar o deploy:${NC}"
+  echo -e "${YELLOW}  export NEXT_PUBLIC_API_URL=https://api.seudominio.com.br${NC}"
+  exit 1
+fi
+
+if [ -z "${JWT_SECRET:-}" ]; then
+  echo -e "${RED}ERRO: JWT_SECRET não está definida.${NC}"
+  echo -e "${YELLOW}  export JWT_SECRET='sua-chave-secreta-com-32-ou-mais-caracteres'${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ Variáveis de ambiente OK${NC}"
 
 # ------------------------------------------------------------------------------
 # PASSO 2 — Baixar código novo do GitHub
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BLUE}[2/7] Baixando atualizações do GitHub (branch: $GIT_BRANCH)...${NC}"
+cd "$PROJECT_DIR"
 git pull origin "$GIT_BRANCH"
 echo -e "${GREEN}✓ Código atualizado${NC}"
 
 # ------------------------------------------------------------------------------
-# PASSO 3 — Instalar dependências (só instala o que for novo)
+# PASSO 3 — Instalar dependências
+# IMPORTANTE: usar 'npm install' (sem --omit=dev) pois o build precisa de
+# devDependencies: typescript e prisma CLI (backend), tailwindcss/postcss/
+# typescript (frontend). Remover devDeps antes do build quebra tudo.
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BLUE}[3/7] Instalando dependências do backend...${NC}"
 cd "$BACKEND_DIR"
-npm install --omit=dev
+npm install
 echo -e "${GREEN}✓ Dependências do backend OK${NC}"
 
 echo ""
 echo -e "${BLUE}[3/7] Instalando dependências do frontend...${NC}"
 cd "$FRONTEND_DIR"
-npm install --omit=dev
+npm install
 echo -e "${GREEN}✓ Dependências do frontend OK${NC}"
 
 # ------------------------------------------------------------------------------
@@ -111,6 +130,8 @@ echo -e "${GREEN}✓ Backend compilado em dist/${NC}"
 
 # ------------------------------------------------------------------------------
 # PASSO 6 — Compilar o frontend (Next.js)
+# NEXT_PUBLIC_API_URL já foi validada no passo 1 e está no ambiente,
+# então next.config.mjs não vai lançar erro de variável faltando.
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BLUE}[6/7] Compilando frontend (Next.js)...${NC}"
@@ -120,18 +141,21 @@ echo -e "${GREEN}✓ Frontend compilado em .next/${NC}"
 
 # ------------------------------------------------------------------------------
 # PASSO 7 — Reiniciar os serviços com PM2
+# Sintaxe correta: pm2 start npm -- run start  (o "--" separa args do PM2 dos do npm)
+# "pm2 start 'npm run start'" é inválido — PM2 trata como nome de arquivo.
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BLUE}[7/7] Reiniciando serviços com PM2...${NC}"
 
-# Se o processo já existir, reinicia. Se não existir, cria.
+# Backend
 pm2 describe "$PM2_BACKEND_NAME" > /dev/null 2>&1 \
   && pm2 restart "$PM2_BACKEND_NAME" \
   || pm2 start "$BACKEND_DIR/dist/server.js" --name "$PM2_BACKEND_NAME"
 
+# Frontend
 pm2 describe "$PM2_FRONTEND_NAME" > /dev/null 2>&1 \
   && pm2 restart "$PM2_FRONTEND_NAME" \
-  || pm2 start "npm run start" --name "$PM2_FRONTEND_NAME" --cwd "$FRONTEND_DIR"
+  || pm2 start npm --name "$PM2_FRONTEND_NAME" --cwd "$FRONTEND_DIR" -- run start
 
 # Salva o estado do PM2 (para sobreviver a reinicialização do servidor)
 pm2 save

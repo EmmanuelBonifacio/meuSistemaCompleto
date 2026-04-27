@@ -26,6 +26,7 @@ import {
 } from "@/services/vendas.service";
 import type { ProdutoVenda } from "@/types/vendas.types";
 import { CATEGORIAS_LABEL } from "@/types/vendas.types";
+import { resolveApiAssetUrl } from "@/lib/resolve-api-asset-url";
 
 // Ordem das categorias — LanÃ§amentos SEMPRE primeiro
 const ORDEM_CATEGORIAS = [
@@ -160,9 +161,7 @@ function gerarPaleta(imageUrl: string): Promise<Paleta> {
 }
 
 function resolveLogoUrl(url: string | null): string | null {
-  if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"}${url}`;
+  return resolveApiAssetUrl(url);
 }
 
 export default function VendasPage() {
@@ -530,25 +529,23 @@ export default function VendasPage() {
         {/* Fileiras de categorias */}
         {!isLoading && !semResultados && (
           <div className="divide-y divide-gray-100">
-            {fileirasOrdenadas.map(
-              ([categoria, produtosDaCategoria]) => (
-                <div
-                  key={categoria}
-                  ref={(el) => {
-                    categoriaRefs.current[categoria] = el;
-                  }}
-                >
-                  <CategoryRow
-                    categoria={categoria}
-                    produtos={produtosDaCategoria}
-                    whatsappNumber={whatsappNumber}
-                    onAdicionarCarrinho={adicionarItem}
-                    corPrimaria={paleta.primaria}
-                    corClara={paleta.clara}
-                  />
-                </div>
-              ),
-            )}
+            {fileirasOrdenadas.map(([categoria, produtosDaCategoria]) => (
+              <div
+                key={categoria}
+                ref={(el) => {
+                  categoriaRefs.current[categoria] = el;
+                }}
+              >
+                <CategoryRow
+                  categoria={categoria}
+                  produtos={produtosDaCategoria}
+                  whatsappNumber={whatsappNumber}
+                  onAdicionarCarrinho={adicionarItem}
+                  corPrimaria={paleta.primaria}
+                  corClara={paleta.clara}
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -591,9 +588,7 @@ export default function VendasPage() {
               />
             </div>
           )}
-          <p className="font-bold text-gray-800 text-lg">
-            {nomeLoja || slug}
-          </p>
+          <p className="font-bold text-gray-800 text-lg">{nomeLoja || slug}</p>
           <p className="text-sm text-gray-400 max-w-xs">
             Compras seguras e cômodas via WhatsApp.
             <br />
