@@ -1,8 +1,8 @@
 // Validação de uploads de imagem: tamanho, MIME declarado e assinatura real (magic bytes).
 // Reduz risco de enviar ficheiro malicioso com Content-Type forjado.
 
-/** Limite alinhado com uso de fotos de produto/logo (ajustável por rota com request.file). */
-export const MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024;
+/** Limite para fotos de produto/logo — alinhado ao cliente (~2MB) + margem (3MB no servidor). */
+export const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/jpeg": ".jpg",

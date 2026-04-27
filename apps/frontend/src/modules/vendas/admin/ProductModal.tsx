@@ -43,6 +43,7 @@ import {
   updateProduto,
   uploadFotoProduto,
 } from "@/services/vendas.service";
+import { tratarImagem } from "@/lib/tratarImagem";
 
 // =============================================================================
 // PROPS
@@ -82,6 +83,10 @@ export function ProductModal({
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoArquivo, setFotoArquivo] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  /** Durante submit: otimização da foto antes do fetch, ou gravação no servidor. */
+  const [loadingStep, setLoadingStep] = useState<"optimize" | "save" | null>(
+    null,
+  );
   const [erro, setErro] = useState<string | null>(null);
   const inputFotoRef = useRef<HTMLInputElement>(null);
 
@@ -163,7 +168,25 @@ export function ProductModal({
     }
 
     setIsLoading(true);
+    setLoadingStep(null);
     try {
+      // Foto: otimiza no cliente antes de qualquer POST; falha aqui não cria/atualiza produto quebrado
+      let arquivoParaUpload: File | null = null;
+      if (fotoArquivo) {
+        setLoadingStep("optimize");
+        try {
+          arquivoParaUpload = await tratarImagem(fotoArquivo);
+        } catch (optErr: unknown) {
+          const msg =
+            optErr instanceof Error
+              ? optErr.message
+              : "Não foi possível otimizar a foto.";
+          setErro(msg);
+          return;
+        }
+      }
+
+      setLoadingStep("save");
       let produtoSalvo: ProdutoVenda;
 
       if (isModoEdicao && produto) {
@@ -177,10 +200,10 @@ export function ProductModal({
       }
 
       // Se selecionou uma nova foto, faz upload após salvar o produto
-      if (fotoArquivo) {
+      if (arquivoParaUpload) {
         const { produto: comFoto } = await uploadFotoProduto(
           produtoSalvo.id,
-          fotoArquivo,
+          arquivoParaUpload,
         );
         produtoSalvo = comFoto;
       }
@@ -193,6 +216,7 @@ export function ProductModal({
       setErro(mensagem);
     } finally {
       setIsLoading(false);
+      setLoadingStep(null);
     }
   };
 
@@ -567,7 +591,9 @@ export function ProductModal({
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Salvando...
+                  {loadingStep === "optimize"
+                    ? "Otimizando foto..."
+                    : "Salvando..."}
                 </>
               ) : isModoEdicao ? (
                 "Salvar alterações"
