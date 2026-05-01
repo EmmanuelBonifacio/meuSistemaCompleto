@@ -1,0 +1,10 @@
+[project]
+name = "brain_sso"
+version = "0.1.0"
+description = "SSO entre o Cérebro (Laravel) e o Músculo (ERPNext)"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["flit_core>=3.2.0,<4"]
+build-backend = "flit_core.buildapi"

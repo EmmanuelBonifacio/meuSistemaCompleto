@@ -1,0 +1,40 @@
+FROM php:8.3-fpm-alpine
+
+# Extensões necessárias para Laravel + MySQL
+RUN apk add --no-cache \
+        bash \
+        git \
+        curl \
+        libpng-dev \
+        libxml2-dev \
+        zip \
+        unzip \
+    && docker-php-ext-install \
+        pdo \
+        pdo_mysql \
+        bcmath \
+        gd \
+        xml \
+        opcache
+
+# Instala Composer
+COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
+# Copia dependências primeiro (aproveita cache Docker)
+COPY composer.json composer.lock ./
+RUN composer install --no-scripts --prefer-dist
+
+# Copia restante do projeto
+COPY . .
+
+# Gera autoload otimizado sem executar scripts (artisan não está disponível ainda)
+RUN composer dump-autoload --optimize --no-scripts
+
+# Permissões
+RUN chown -R www-data:www-data /var/www/html/storage \
+                                /var/www/html/bootstrap/cache
+
+EXPOSE 9000
+CMD ["php-fpm"]

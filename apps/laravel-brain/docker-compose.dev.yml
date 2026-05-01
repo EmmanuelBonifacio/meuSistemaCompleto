@@ -1,0 +1,185 @@
+# ==============================================================================
+# docker-compose.dev.yml — Ambiente de Desenvolvimento
+# Integração: Laravel (Cérebro) ↔ ERPNext (Músculo)
+#
+# Subdomínios de desenvolvimento (adicionar ao /etc/hosts ou C:\Windows\System32\drivers\etc\hosts):
+#   127.0.0.1  app.test
+#   127.0.0.1  financeiro.test
+#
+# Como subir:
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Acesso:
+#   Laravel  → http://app.test
+#   ERPNext  → http://financeiro.test
+# ==============================================================================
+
+name: erp-brain-dev
+
+services:
+  # ============================================================================
+  # NGINX — Proxy Reverso (roteador de subdomínios)
+  # ============================================================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: brain_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - laravel
+      - erpnext
+    networks:
+      - brain_net
+
+  # ============================================================================
+  # LARAVEL — O Cérebro (PHP 8.3 + FPM)
+  # ============================================================================
+  laravel:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: brain_laravel
+    environment:
+      APP_NAME: "meuSistemaCompleto"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: "http://app.test"
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: brain_db
+      DB_USERNAME: brain_user
+      DB_PASSWORD: brain_pass
+      # Segredo compartilhado para validar JWT SSO no Frappe Custom App
+      ERPNEXT_SSO_SECRET: "${ERPNEXT_SSO_SECRET:-change_this_in_production}"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - brain_net
+
+  # ============================================================================
+  # MySQL — Banco do Laravel
+  # ============================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: brain_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: brain_db
+      MYSQL_USER: brain_user
+      MYSQL_PASSWORD: brain_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-ubrain_user",
+          "-pbrain_pass",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - brain_net
+
+  # ============================================================================
+  # REDIS — Cache e Queue do Laravel
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: brain_redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - brain_net
+
+  # ============================================================================
+  # ERPNEXT — O Músculo
+  # Imagem oficial Frappe: https://github.com/frappe/frappe_docker
+  #
+  # IMPORTANTE: O ERPNext demora ~3-5 minutos para inicializar na primeira vez.
+  # Aguarde o log "Starting gunicorn on 0.0.0.0:8000" antes de acessar.
+  # ============================================================================
+  erpnext:
+    image: frappe/erpnext:v15
+    container_name: brain_erpnext
+    environment:
+      FRAPPE_SITE_NAME_HEADER: financeiro.test
+      # Segredo compartilhado — DEVE ser igual ao ERPNEXT_SSO_SECRET do Laravel
+      BRAIN_SSO_SECRET: "${ERPNEXT_SSO_SECRET:-change_this_in_production}"
+      BRAIN_SSO_ENDPOINT: "http://laravel/api/sso/validate"
+    volumes:
+      - erpnext_sites:/home/frappe/frappe-bench/sites
+      - erpnext_logs:/home/frappe/frappe-bench/logs
+      # Monta o Custom App de SSO (criado na Fase 2)
+      - ./frappe-apps/brain_sso:/home/frappe/frappe-bench/apps/brain_sso
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis_erpnext:
+        condition: service_started
+    networks:
+      - brain_net
+
+  # ============================================================================
+  # MARIADB — Banco do ERPNext (obrigatório, Frappe não suporta MySQL 8 completo)
+  # ============================================================================
+  mariadb:
+    image: mariadb:10.6
+    container_name: brain_mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: frappe
+      MYSQL_DATABASE: _frappe_default
+      MYSQL_USER: frappe
+      MYSQL_PASSWORD: frappe
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+      --skip-innodb-read-only-compressed
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - brain_net
+
+  # ============================================================================
+  # REDIS — Cache e Queue do ERPNext (separado do Redis do Laravel)
+  # ============================================================================
+  redis_erpnext:
+    image: redis:7-alpine
+    container_name: brain_redis_erpnext
+    networks:
+      - brain_net
+
+# ==============================================================================
+# VOLUMES
+# ==============================================================================
+volumes:
+  mysql_data:
+  redis_data:
+  mariadb_data:
+  erpnext_sites:
+  erpnext_logs:
+
+# ==============================================================================
+# NETWORKS
+# ==============================================================================
+networks:
+  brain_net:
+    driver: bridge
