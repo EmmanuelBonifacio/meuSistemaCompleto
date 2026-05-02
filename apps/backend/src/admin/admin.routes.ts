@@ -44,6 +44,7 @@ import {
   resetTenantUserPasswordHandler,
   deleteTenantUserHandler,
 } from "./admin.controller";
+import { adminCrmErpRoutes } from "./crm-erp/admin.crm-erp.routes";
 
 // =============================================================================
 // PLUGIN: adminRoutes
@@ -173,4 +174,20 @@ export async function adminRoutes(fastify: FastifyInstance): Promise<void> {
     resetTenantUserPasswordHandler,
   );
   fastify.delete("/tenants/:id/users/:userId", deleteTenantUserHandler);
+
+  // ==========================================================================
+  // ROTAS: CRM e ERP por tenant
+  // ==========================================================================
+  // Registradas como sub-plugin — herdam o preHandler do adminMiddleware
+  // aplicado no escopo deste plugin (sem necessidade de nova proteção).
+  //
+  // Rotas disponíveis:
+  //   GET/PUT  /admin/tenants/:tenantId/crm
+  //   GET/POST /admin/tenants/:tenantId/crm/pagamentos
+  //   DELETE   /admin/tenants/:tenantId/crm/pagamentos/:pagamentoId
+  //   GET/POST /admin/tenants/:tenantId/crm/arquivos
+  //   DELETE   /admin/tenants/:tenantId/crm/arquivos/:arquivoId
+  //   GET/PUT  /admin/tenants/:tenantId/erp
+  // ==========================================================================
+  await fastify.register(adminCrmErpRoutes);
 }

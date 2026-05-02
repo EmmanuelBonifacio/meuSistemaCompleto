@@ -92,20 +92,20 @@ export default function AdminLayout({
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar admin */}
-      <aside className="flex w-56 flex-col border-r border-border bg-sidebar">
+      {/* Sidebar admin — icon-only no mobile, completa em md+ */}
+      <aside className="flex w-12 md:w-56 shrink-0 flex-col border-r border-border bg-sidebar">
         {/* Logo */}
-        <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-bold">
+        <div className="flex h-14 items-center justify-center md:justify-start gap-2 border-b border-sidebar-border px-2 md:px-4">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-bold shrink-0">
             S
           </div>
-          <span className="font-semibold text-sidebar-foreground">
+          <span className="font-semibold text-sidebar-foreground hidden md:block">
             Admin Panel
           </span>
         </div>
 
         {/* Navegação */}
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 p-1.5 md:p-3">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = item.exact
@@ -115,34 +115,36 @@ export default function AdminLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                title={item.label}
+                className={`flex items-center justify-center md:justify-start gap-0 md:gap-2.5 rounded-lg px-2 md:px-3 py-2 text-sm transition-colors ${
                   isActive
                     ? "bg-sidebar-accent text-foreground font-medium"
                     : "text-sidebar-foreground hover:bg-sidebar-accent"
                 }`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                {item.label}
+                <span className="hidden md:inline">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
         {/* Rodapé com logout */}
-        <div className="border-t border-sidebar-border p-3">
+        <div className="border-t border-sidebar-border p-1.5 md:p-3">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            title="Sair"
+            className="flex w-full items-center justify-center md:justify-start gap-0 md:gap-2.5 rounded-lg px-2 md:px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
           >
-            <LogOut className="h-4 w-4" />
-            Sair
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span className="hidden md:inline">Sair</span>
           </button>
         </div>
       </aside>
 
       {/* Conteúdo principal */}
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto p-6 max-w-6xl">{children}</div>
+        <div className="container mx-auto p-3 md:p-6 max-w-6xl">{children}</div>
       </main>
     </div>
   );

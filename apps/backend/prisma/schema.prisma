@@ -84,10 +84,17 @@ model Tenant {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relacionamento: um tenant pode ter vários módulos ativados
-  modules   TenantModule[]
+  modules         TenantModule[]
 
   // Relacionamento: logs de requisições do tenant
-  logs      RequestLog[]
+  logs            RequestLog[]
+
+  // Relacionamento: dados administrativos CRM/ERP
+  crm             TenantCrm?
+  pagamentos      TenantCrmPagamento[]
+  erpConfig       TenantErpConfig?
+  erpParcelas     TenantErpParcela[]
+  arquivos        TenantCrmArquivo[]
 
   @@map("tenants")
   // @@map define o nome real da tabela no banco. Seguimos snake_case no banco
@@ -244,4 +251,114 @@ model RequestLog {
   // Índice para filtrar logs por módulo de um tenant específico
 
   @@map("request_logs")
+}
+
+// =============================================================================
+// MODELO: TenantCrm
+// =============================================================================
+// Dados de CRM administrativos do tenant (contato, observações).
+// Fica no schema public — dados do painel admin, não do tenant.
+// =============================================================================
+model TenantCrm {
+  id          String   @id @default(uuid())
+  tenantId    String   @unique @map("tenant_id")
+  nome        String?
+  telefone    String?
+  email       String?
+  cpfCnpj     String?  @map("cpf_cnpj")
+  observacoes String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_crm")
+}
+
+// =============================================================================
+// MODELO: TenantCrmPagamento
+// =============================================================================
+// Lançamentos financeiros administrativos (mensalidades, cobranças).
+// =============================================================================
+model TenantCrmPagamento {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  dataPagamento  DateTime @map("data_pagamento") @db.Date
+  valor          Decimal  @db.Decimal(10, 2)
+  forma          String
+  referencia     String?
+  status         String   @default("pendente")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_crm_pagamentos")
+}
+
+// =============================================================================
+// MODELO: TenantErpConfig
+// =============================================================================
+// Configuração do módulo ERP por tenant.
+// =============================================================================
+model TenantErpConfig {
+  id                   String    @id @default(uuid())
+  tenantId             String    @unique @map("tenant_id")
+  ativo                Boolean   @default(false)
+  plano                String?
+  limiteSkus           Int       @default(1000) @map("limite_skus")
+  modulos              Json      @default("[]")
+  certificadoNfe       String?   @map("certificado_nfe")
+  ambienteNfe          String    @default("homologacao") @map("ambiente_nfe")
+  dataInicioContrato   DateTime? @map("data_inicio_contrato") @db.Date
+  dataFimContrato      DateTime? @map("data_fim_contrato") @db.Date
+  valorParcela         Decimal?  @map("valor_parcela") @db.Decimal(10, 2)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_erp_config")
+}
+
+// =============================================================================
+// MODELO: TenantErpParcela
+// =============================================================================
+// Parcelas do plano ERP geradas pelo admin para controle de recebimento.
+// =============================================================================
+model TenantErpParcela {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  numero         Int
+  totalParcelas  Int      @map("total_parcelas")
+  vencimento     DateTime @map("vencimento") @db.Date
+  valor          Decimal  @db.Decimal(10, 2)
+  status         String   @default("pendente")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_erp_parcelas")
+}
+
+// =============================================================================
+// MODELO: TenantCrmArquivo
+// =============================================================================
+// Arquivos e contratos enviados via painel admin para o tenant.
+// =============================================================================
+model TenantCrmArquivo {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  nomeOriginal  String   @map("nome_original")
+  caminho       String
+  mimeType      String?  @map("mime_type")
+  tamanhoBytes  BigInt?  @map("tamanho_bytes")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_crm_arquivos")
 }
