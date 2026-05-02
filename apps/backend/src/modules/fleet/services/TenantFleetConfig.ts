@@ -6,7 +6,7 @@
 //   Isola o acesso ao banco para credenciais — nunca loga nem expõe senhas.
 //
 // RESPONSABILIDADES:
-//   ✅ Buscar credenciais no banco (tabela fleet_tenant_configs)
+//   ✅ Buscar credenciais no banco (tabela fleet_tenant_configs via Prisma)
 //   ✅ Cache em memória por sessão para evitar queries repetidas
 //   ✅ Salvar/atualizar credenciais de um tenant
 //
@@ -42,37 +42,28 @@ export interface SaveFleetCredentialsInput {
 // FUNÇÃO: getFleetCredentials
 // =============================================================================
 // Carrega as credenciais de um tenant. Retorna null se não configuradas.
-// Usa $queryRaw porque a tabela fleet_tenant_configs fica no schema public
-// e é gerenciada fora do Prisma schema (migration SQL manual).
+// Usa o modelo Prisma FleetTenantConfig (tabela fleet_tenant_configs).
 // =============================================================================
 export async function getFleetCredentials(
   tenantId: string,
 ): Promise<FleetCredentials | null> {
-  // Usamos $queryRawUnsafe para que o cast ::text fique no SQL string
-  // executado pelo PostgreSQL — evita o erro "text = uuid" do Prisma 6.
-  const rows = await prisma.$queryRawUnsafe<
-    Array<{
-      traccar_user: string | null;
-      traccar_password: string | null;
-      fleetbase_api_key: string | null;
-      fleetms_token: string | null;
-    }>
-  >(
-    `SELECT traccar_user, traccar_password, fleetbase_api_key, fleetms_token
-     FROM public.fleet_tenant_configs
-     WHERE tenant_id = $1::text
-     LIMIT 1`,
-    tenantId,
-  );
+  const config = await prisma.fleetTenantConfig.findUnique({
+    where: { tenantId },
+    select: {
+      traccarUser: true,
+      traccarPassword: true,
+      fleetbaseApiKey: true,
+      fleetmsToken: true,
+    },
+  });
 
-  if (rows.length === 0) return null;
+  if (!config) return null;
 
-  const row = rows[0];
   return {
-    traccarUser: row.traccar_user,
-    traccarPassword: row.traccar_password,
-    fleetbaseApiKey: row.fleetbase_api_key,
-    fleetmsToken: row.fleetms_token,
+    traccarUser: config.traccarUser,
+    traccarPassword: config.traccarPassword,
+    fleetbaseApiKey: config.fleetbaseApiKey,
+    fleetmsToken: config.fleetmsToken,
   };
 }
 
@@ -84,21 +75,19 @@ export async function getFleetCredentials(
 export async function saveFleetCredentials(
   input: SaveFleetCredentialsInput,
 ): Promise<void> {
-  // Usamos $executeRawUnsafe para o mesmo motivo: evitar "text = uuid" do Prisma 6.
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO public.fleet_tenant_configs
-       (tenant_id, traccar_user, traccar_password, fleetbase_api_key, fleetms_token)
-     VALUES ($1::text, $2, $3, $4, $5)
-     ON CONFLICT (tenant_id) DO UPDATE SET
-       traccar_user      = EXCLUDED.traccar_user,
-       traccar_password  = EXCLUDED.traccar_password,
-       fleetbase_api_key = EXCLUDED.fleetbase_api_key,
-       fleetms_token     = EXCLUDED.fleetms_token,
-       updated_at        = now()`,
-    input.tenantId,
-    input.traccarUser ?? null,
-    input.traccarPassword ?? null,
-    input.fleetbaseApiKey ?? null,
-    input.fleetmsToken ?? null,
-  );
+  const payload = {
+    traccarUser: input.traccarUser ?? null,
+    traccarPassword: input.traccarPassword ?? null,
+    fleetbaseApiKey: input.fleetbaseApiKey ?? null,
+    fleetmsToken: input.fleetmsToken ?? null,
+  };
+
+  await prisma.fleetTenantConfig.upsert({
+    where: { tenantId: input.tenantId },
+    create: {
+      tenantId: input.tenantId,
+      ...payload,
+    },
+    update: payload,
+  });
 }

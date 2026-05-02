@@ -56,8 +56,8 @@ const TYPE_CONFIG: Record<
 > = {
   preventive: { label: "Preventiva", icon: Calendar },
   corrective: { label: "Corretiva", icon: Wrench },
-  inspection: { label: "InspeÃ§Ã£o", icon: CheckCircle },
-  fuel: { label: "CombustÃ­vel", icon: Fuel },
+  inspection: { label: "Inspeção", icon: CheckCircle },
+  fuel: { label: "Combustível", icon: Fuel },
   document: { label: "Documento", icon: AlertTriangle },
 };
 
@@ -72,7 +72,7 @@ const STATUS_CONFIG: Record<
     text: "text-amber-800",
   },
   completed: {
-    label: "ConcluÃ­do",
+    label: "Concluído",
     bg: "bg-green-100",
     text: "text-green-800",
   },
@@ -89,7 +89,7 @@ function isOverdue(record: MaintenanceRecord): boolean {
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "â€”";
+  if (!iso) return "-";
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -98,7 +98,7 @@ function formatDate(iso: string | null): string {
 }
 
 function formatCurrency(val: number | null): string {
-  if (val === null) return "â€”";
+  if (val === null) return "-";
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
@@ -202,7 +202,7 @@ export function MaintenancePage() {
       setTotalPages(result.totalPages);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Erro ao carregar manutenÃ§Ãµes.",
+        err instanceof Error ? err.message : "Erro ao carregar manutenções.",
       );
     } finally {
       setIsLoading(false);
@@ -219,12 +219,12 @@ export function MaintenancePage() {
   function getVehicleLabel(vehicleId: string): string {
     const v = vehicles.find((x) => x.id === vehicleId);
     if (!v) return vehicleId.slice(0, 8);
-    return v.plate + (v.model ? ` â€” ${v.model}` : "");
+    return v.plate + (v.model ? ` - ${v.model}` : "");
   }
 
   async function handleSchedule() {
     if (!form.vehicle_id || !form.description.trim()) {
-      showToast("VeÃ­culo e descriÃ§Ã£o sÃ£o obrigatÃ³rios.", "error");
+      showToast("Veículo e descrição são obrigatórios.", "error");
       return;
     }
     setIsSaving(true);
@@ -240,7 +240,7 @@ export function MaintenancePage() {
         odometer_km: form.odometer_km ? parseInt(form.odometer_km) : undefined,
         notes: form.notes || undefined,
       });
-      showToast("ManutenÃ§Ã£o agendada com sucesso.", "success");
+      showToast("Manutenção agendada com sucesso.", "success");
       setScheduleOpen(false);
       setForm(EMPTY_FORM);
       fetchRecords();
@@ -264,7 +264,7 @@ export function MaintenancePage() {
         cost: completeForm.cost ? parseFloat(completeForm.cost) : undefined,
         notes: completeForm.notes || undefined,
       });
-      showToast("ManutenÃ§Ã£o registrada como concluÃ­da.", "success");
+      showToast("Manutenção registrada como concluída.", "success");
       setCompleteId(null);
       fetchRecords();
     } catch (err) {
@@ -288,7 +288,7 @@ export function MaintenancePage() {
         status: "scheduled",
         completed_date: undefined,
       });
-      showToast("ManutenÃ§Ã£o adiada.", "success");
+      showToast("Manutenção adiada.", "success");
       setPostponeId(null);
       setPostponeDate("");
       fetchRecords();
@@ -304,7 +304,7 @@ export function MaintenancePage() {
     setIsCancelling(true);
     try {
       await updateMaintenance(cancelId, { status: "cancelled" });
-      showToast("ManutenÃ§Ã£o cancelada.", "success");
+      showToast("Manutenção cancelada.", "success");
       setCancelId(null);
       fetchRecords();
     } catch (err) {
@@ -319,7 +319,7 @@ export function MaintenancePage() {
 
   async function handleSaveFuel() {
     if (!fuelForm.vehicle_id || !fuelForm.description.trim()) {
-      showToast("VeÃ­culo e descriÃ§Ã£o sÃ£o obrigatÃ³rios.", "error");
+      showToast("Veículo e descrição são obrigatórios.", "error");
       return;
     }
     setIsSavingFuel(true);
@@ -354,18 +354,18 @@ export function MaintenancePage() {
   const tabs: Array<{ key: TabKey; label: string; icon: React.ElementType }> = [
     { key: "pending", label: "Pendentes", icon: AlertTriangle },
     { key: "scheduled", label: "Agendadas", icon: Calendar },
-    { key: "completed", label: "ConcluÃ­das", icon: CheckCircle },
-    { key: "fuel", label: "CombustÃ­vel", icon: Fuel },
+    { key: "completed", label: "Concluídas", icon: CheckCircle },
+    { key: "fuel", label: "Combustível", icon: Fuel },
   ];
 
   return (
     <div className="space-y-6">
-      {/* CabeÃ§alho */}
+      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">ManutenÃ§Ã£o</h1>
+          <h1 className="text-xl font-bold text-gray-900">Manutenção</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Controle de manutenÃ§Ãµes e abastecimentos
+            Controle de manutenções e abastecimentos
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -389,7 +389,7 @@ export function MaintenancePage() {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Agendar ManutenÃ§Ã£o
+              Agendar Manutenção
             </button>
           )}
           <button
@@ -452,7 +452,7 @@ export function MaintenancePage() {
           <p className="text-sm text-gray-400 mt-1">
             {activeTab === "fuel"
               ? "Registre o primeiro abastecimento."
-              : "Agende a primeira manutenÃ§Ã£o."}
+              : "Agende a primeira manutenção."}
           </p>
         </div>
       ) : (
@@ -462,13 +462,13 @@ export function MaintenancePage() {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="text-left px-4 py-3 font-medium text-gray-500">
-                    VeÃ­culo
+                    Veículo
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">
                     Tipo
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">
-                    DescriÃ§Ã£o
+                    Descrição
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-gray-500">
                     {activeTab === "fuel" ? "Data" : "Data prevista"}
@@ -481,7 +481,7 @@ export function MaintenancePage() {
                   </th>
                   {activeTab !== "fuel" && activeTab !== "completed" && (
                     <th className="text-right px-4 py-3 font-medium text-gray-500">
-                      AÃ§Ãµes
+                      Ações
                     </th>
                   )}
                 </tr>
@@ -556,7 +556,7 @@ export function MaintenancePage() {
                                       cost: r.cost?.toString() ?? "",
                                     });
                                   }}
-                                  title="Registrar conclusÃ£o"
+                                  title="Registrar conclusão"
                                   className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
                                 >
                                   <CheckCircle className="w-4 h-4" />
@@ -597,7 +597,7 @@ export function MaintenancePage() {
         </div>
       )}
 
-      {/* PaginaÃ§Ã£o */}
+      {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <button
@@ -608,19 +608,19 @@ export function MaintenancePage() {
             <ChevronLeft className="w-4 h-4" /> Anterior
           </button>
           <span className="text-sm text-gray-500">
-            PÃ¡gina {page} de {totalPages}
+            Página {page} de {totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
           >
-            PrÃ³xima <ChevronRight className="w-4 h-4" />
+            Próxima <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Modal: Agendar ManutenÃ§Ã£o */}
+      {/* Modal: Agendar Manutenção */}
       <Dialog
         open={scheduleOpen}
         onOpenChange={(open) => {
@@ -629,15 +629,15 @@ export function MaintenancePage() {
       >
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Agendar ManutenÃ§Ã£o</DialogTitle>
+            <DialogTitle>Agendar Manutenção</DialogTitle>
             <DialogDescription>
-              Preencha os dados da manutenÃ§Ã£o a ser agendada.
+              Preencha os dados da manutenção a ser agendada.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                VeÃ­culo *
+                Veículo *
               </label>
               <select
                 value={form.vehicle_id}
@@ -646,11 +646,11 @@ export function MaintenancePage() {
                 }
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Selecionar veÃ­culo...</option>
+                <option value="">Selecionar veículo...</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.plate}
-                    {v.model ? ` â€” ${v.model}` : ""}
+                    {v.model ? ` - ${v.model}` : ""}
                   </option>
                 ))}
               </select>
@@ -672,7 +672,7 @@ export function MaintenancePage() {
                 >
                   <option value="preventive">Preventiva</option>
                   <option value="corrective">Corretiva</option>
-                  <option value="inspection">InspeÃ§Ã£o</option>
+                  <option value="inspection">Inspeção</option>
                   <option value="document">Documento</option>
                 </select>
               </div>
@@ -692,14 +692,14 @@ export function MaintenancePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                DescriÃ§Ã£o *
+                Descrição *
               </label>
               <input
                 value={form.description}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
-                placeholder="Troca de Ã³leo, revisÃ£o dos 50.000 km..."
+                placeholder="Troca de óleo, revisão dos 50.000 km..."
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -721,7 +721,7 @@ export function MaintenancePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  OdÃ´metro (km)
+                  Odômetro (km)
                 </label>
                 <input
                   type="number"
@@ -736,14 +736,14 @@ export function MaintenancePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ObservaÃ§Ãµes
+                Observações
               </label>
               <textarea
                 value={form.notes}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, notes: e.target.value }))
                 }
-                placeholder="PeÃ§as necessÃ¡rias, oficina responsÃ¡vel..."
+                placeholder="Peças necessárias, oficina responsável..."
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
@@ -769,7 +769,7 @@ export function MaintenancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Registrar ConclusÃ£o */}
+      {/* Modal: Registrar Conclusão */}
       <Dialog
         open={!!completeId}
         onOpenChange={(open) => {
@@ -778,15 +778,15 @@ export function MaintenancePage() {
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Registrar ConclusÃ£o</DialogTitle>
+            <DialogTitle>Registrar Conclusão</DialogTitle>
             <DialogDescription>
-              Informe os dados de conclusÃ£o da manutenÃ§Ã£o.
+              Informe os dados de conclusão da manutenção.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Data de conclusÃ£o *
+                Data de conclusão *
               </label>
               <input
                 type="datetime-local"
@@ -817,7 +817,7 @@ export function MaintenancePage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                ObservaÃ§Ãµes
+                Observações
               </label>
               <textarea
                 value={completeForm.notes}
@@ -845,7 +845,7 @@ export function MaintenancePage() {
               {isCompleting && (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               )}
-              Confirmar ConclusÃ£o
+              Confirmar Conclusão
             </button>
           </DialogFooter>
         </DialogContent>
@@ -863,9 +863,9 @@ export function MaintenancePage() {
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Adiar ManutenÃ§Ã£o</DialogTitle>
+            <DialogTitle>Adiar Manutenção</DialogTitle>
             <DialogDescription>
-              Selecione a nova data para a manutenÃ§Ã£o.
+              Selecione a nova data para a manutenção.
             </DialogDescription>
           </DialogHeader>
           <div>
@@ -914,10 +914,10 @@ export function MaintenancePage() {
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Cancelar ManutenÃ§Ã£o?</DialogTitle>
+            <DialogTitle>Cancelar Manutenção?</DialogTitle>
             <DialogDescription>
-              Esta aÃ§Ã£o marcarÃ¡ a manutenÃ§Ã£o como cancelada. NÃ£o Ã©
-              possÃ­vel desfazer.
+              Esta ação marcará a manutenção como cancelada. Não é
+              possível desfazer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -959,7 +959,7 @@ export function MaintenancePage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                VeÃ­culo *
+                Veículo *
               </label>
               <select
                 value={fuelForm.vehicle_id}
@@ -968,25 +968,25 @@ export function MaintenancePage() {
                 }
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Selecionar veÃ­culo...</option>
+                <option value="">Selecionar veículo...</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.plate}
-                    {v.model ? ` â€” ${v.model}` : ""}
+                    {v.model ? ` - ${v.model}` : ""}
                   </option>
                 ))}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                DescriÃ§Ã£o *
+                Descrição *
               </label>
               <input
                 value={fuelForm.description}
                 onChange={(e) =>
                   setFuelForm((f) => ({ ...f, description: e.target.value }))
                 }
-                placeholder="Abastecimento completo â€” 45 litros"
+                placeholder="Abastecimento completo - 45 litros"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

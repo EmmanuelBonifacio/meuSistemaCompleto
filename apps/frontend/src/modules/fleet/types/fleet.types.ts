@@ -43,6 +43,7 @@ export interface VehiclePosition {
 }
 
 export interface UnifiedVehicle extends Vehicle {
+  driverName?: string | null;
   position: VehiclePosition | null;
   activeOrder: {
     id: string;
@@ -54,6 +55,13 @@ export interface UnifiedVehicle extends Vehicle {
     description: string;
     scheduledDate: string | null;
   }>;
+}
+
+// Resposta do endpoint GET /fleet/vehicles/unified
+// (não é paginada — retorna todos os veículos com dados dos engines)
+export interface UnifiedVehiclesResponse {
+  data: UnifiedVehicle[];
+  total: number;
 }
 
 // =============================================================================

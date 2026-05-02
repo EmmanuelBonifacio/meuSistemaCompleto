@@ -96,6 +96,9 @@ model Tenant {
   erpParcelas     TenantErpParcela[]
   arquivos        TenantCrmArquivo[]
 
+  // Relacionamento: configuração dos engines de frota
+  fleetConfig     FleetTenantConfig?
+
   @@map("tenants")
   // @@map define o nome real da tabela no banco. Seguimos snake_case no banco
   // e camelCase no código TypeScript — o Prisma faz o mapeamento automaticamente.
@@ -341,6 +344,27 @@ model TenantErpParcela {
 
   @@index([tenantId])
   @@map("tenant_erp_parcelas")
+}
+
+// =============================================================================
+// MODELO: FleetTenantConfig
+// =============================================================================
+// Credenciais dos engines de frota por tenant (Traccar, Fleetbase, Fleetms).
+// Fica no schema public — configuração global por tenant.
+// =============================================================================
+model FleetTenantConfig {
+  id                String   @id @default(uuid())
+  tenantId          String   @unique @map("tenant_id")
+  traccarUser       String?  @map("traccar_user")
+  traccarPassword   String?  @map("traccar_password")
+  fleetbaseApiKey   String?  @map("fleetbase_api_key")
+  fleetmsToken      String?  @map("fleetms_token")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("fleet_tenant_configs")
 }
 
 // =============================================================================

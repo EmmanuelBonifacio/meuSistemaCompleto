@@ -2,15 +2,15 @@
 // src/modules/fleet/services/FleetBridgeService.ts
 // =============================================================================
 // O QUE FAZ:
-//   Orquestra os 3 engines (Traccar, Fleetbase, Fleetms) em chamadas unificadas.
-//   É o ponto central do módulo de frota — os controllers chamam apenas este
-//   service, que decide qual engine consultar e como combinar os resultados.
+//   Orquestra os dados de frota combinando:
+//   - Banco local do tenant (veículos, motoristas, manutenções)
+//   - Traccar (posições GPS em tempo real) — opcional
+//   - Fleetbase (ordens de despacho) — opcional
 //
 // RESPONSABILIDADES:
-//   ✅ Instanciar cada engine service com as credenciais do tenant
-//   ✅ Combinar dados dos 3 engines em respostas unificadas
-//   ✅ Tratar falha parcial (ex: Traccar offline mas Fleetms ok)
-//   ✅ Sincronizar veículos entre o banco local e os engines
+//   ✅ Instanciar engines externos com as credenciais do tenant (se configuradas)
+//   ✅ Combinar dados locais + engines em respostas unificadas
+//   ✅ Tratar falha parcial (ex: Traccar offline — retorna dados sem posição)
 //
 // NÃO É RESPONSABILIDADE DESTE ARQUIVO:
 //   ❌ Validar input (isso é dos DTOs/schemas)
@@ -19,18 +19,14 @@
 
 import { TraccarService, type TraccarPosition } from "./TraccarService";
 import { FleetbaseService, type FleetbaseOrder } from "./FleetbaseService";
-import {
-  FleetmsService,
-  type FleetmsMaintenanceRecord,
-} from "./FleetmsService";
 import { getFleetCredentials } from "./TenantFleetConfig";
 import { withTenantSchema } from "../../../core/database/prisma";
 
 // =============================================================================
-// INTERFACE: visão consolidada de um veículo (dados dos 3 engines)
+// INTERFACE: visão consolidada de um veículo (dados locais + engines opcionais)
 // =============================================================================
 export interface UnifiedVehicleView {
-  id: string; // ID local no banco do tenant
+  id: string;
   plate: string;
   brand: string | null;
   model: string | null;
@@ -38,7 +34,6 @@ export interface UnifiedVehicleView {
   color: string | null;
   status: string;
 
-  // Posição em tempo real (Traccar) — null se engine offline ou sem sinal
   position: {
     lat: number;
     lng: number;
@@ -47,14 +42,12 @@ export interface UnifiedVehicleView {
     updatedAt: string;
   } | null;
 
-  // Ordem ativa (Fleetbase) — null se sem despacho ativo
   activeOrder: {
     id: string;
     status: string;
     destination: string;
   } | null;
 
-  // Alertas de manutenção (Fleetms) — array vazio se tudo ok
   maintenanceAlerts: Array<{
     type: string;
     description: string;
@@ -75,15 +68,14 @@ export interface FleetDashboardSummary {
 }
 
 // =============================================================================
-// FUNÇÃO AUXILIAR: buildServices
+// FUNÇÃO AUXILIAR: buildOptionalServices
 // =============================================================================
-// Carrega credenciais e instancia os 3 engines para um tenant.
-// Lança erro se as credenciais não estiverem configuradas.
+// Tenta carregar credenciais e instanciar engines externos.
+// Se não configurados, retorna null — o restante do código trata isso.
 // =============================================================================
-async function buildServices(tenantId: string): Promise<{
+async function buildOptionalServices(tenantId: string): Promise<{
   traccar: TraccarService | null;
   fleetbase: FleetbaseService | null;
-  fleetms: FleetmsService | null;
 }> {
   const creds = await getFleetCredentials(tenantId);
 
@@ -98,10 +90,6 @@ async function buildServices(tenantId: string): Promise<{
 
     fleetbase: creds?.fleetbaseApiKey
       ? new FleetbaseService(creds.fleetbaseApiKey)
-      : null,
-
-    fleetms: creds?.fleetmsToken
-      ? new FleetmsService(creds.fleetmsToken)
       : null,
   };
 }
@@ -120,17 +108,14 @@ export class FleetBridgeService {
 
   // ---------------------------------------------------------------------------
   // Obter visão unificada de todos os veículos do tenant
-  // Combina dados do banco local + Traccar (posições) + Fleetbase (ordens)
-  //   + Fleetms (alertas de manutenção)
   // ---------------------------------------------------------------------------
   async getUnifiedVehicles(): Promise<UnifiedVehicleView[]> {
-    const { traccar, fleetbase, fleetms } = await buildServices(this.tenantId);
+    const { traccar, fleetbase } = await buildOptionalServices(this.tenantId);
 
-    // Busca veículos no banco local do tenant
-    const localVehicles = await withTenantSchema(
-      this.schemaName,
-      async (db) => {
-        return db.$queryRaw<
+    // Busca veículos e manutenções pendentes do banco local em paralelo
+    const [localVehicles, localMaintenances] = await Promise.allSettled([
+      withTenantSchema(this.schemaName, async (db) =>
+        db.$queryRaw<
           Array<{
             id: string;
             plate: string;
@@ -147,20 +132,41 @@ export class FleetBridgeService {
                  traccar_device_id, fleetbase_asset_id
           FROM vehicles
           ORDER BY plate
-        `;
-      },
-    );
+        `,
+      ),
+      withTenantSchema(this.schemaName, async (db) =>
+        db.$queryRaw<
+          Array<{
+            id: string;
+            vehicle_id: string;
+            type: string;
+            description: string;
+            scheduled_date: Date | null;
+          }>
+        >`
+          SELECT id, vehicle_id, type, description, scheduled_date
+          FROM maintenance_records
+          WHERE status IN ('scheduled', 'in_progress')
+          ORDER BY scheduled_date ASC NULLS LAST
+        `,
+      ),
+    ]);
 
-    // Busca posições em paralelo (tolerante a falhas)
-    const [positions, orders, maintenances] = await Promise.allSettled([
+    if (localVehicles.status === "rejected") {
+      throw localVehicles.reason as Error;
+    }
+
+    const vehicles = localVehicles.value;
+
+    // Busca posições e ordens dos engines externos em paralelo (tolerante a falhas)
+    const [positions, orders] = await Promise.allSettled([
       traccar ? traccar.listPositions() : Promise.resolve([]),
       fleetbase
         ? fleetbase.listOrders({ status: "in_transit" })
         : Promise.resolve([]),
-      fleetms ? fleetms.listMaintenanceRecords() : Promise.resolve([]),
     ]);
 
-    // Indexa posições por deviceId
+    // Indexa posições por traccar_device_id
     const positionMap = new Map<number, TraccarPosition>();
     if (positions.status === "fulfilled") {
       for (const pos of positions.value) {
@@ -168,36 +174,37 @@ export class FleetBridgeService {
       }
     }
 
-    // Indexa ordens ativas por asset_id do Fleetbase
+    // Indexa ordens ativas por fleetbase_asset_id
     const orderMap = new Map<string, FleetbaseOrder>();
     if (orders.status === "fulfilled") {
       for (const order of orders.value) {
-        // Fleetbase vincula ativos às ordens via driver/asset
         orderMap.set(order.id, order);
       }
     }
 
-    // Agrupa alertas de manutenção por vehicle_id externo
-    const maintenanceMap = new Map<string, FleetmsMaintenanceRecord[]>();
-    if (maintenances.status === "fulfilled") {
-      for (const rec of maintenances.value) {
-        if (rec.status === "scheduled" || rec.status === "in_progress") {
-          const existing = maintenanceMap.get(rec.vehicle_id) ?? [];
-          existing.push(rec);
-          maintenanceMap.set(rec.vehicle_id, existing);
-        }
+    // Agrupa alertas de manutenção por vehicle_id (ID local)
+    const maintenanceMap = new Map<
+      string,
+      Array<{ type: string; description: string; scheduledDate: string | null }>
+    >();
+    if (localMaintenances.status === "fulfilled") {
+      for (const rec of localMaintenances.value) {
+        const alerts = maintenanceMap.get(rec.vehicle_id) ?? [];
+        alerts.push({
+          type: rec.type,
+          description: rec.description,
+          scheduledDate: rec.scheduled_date
+            ? rec.scheduled_date.toISOString()
+            : null,
+        });
+        maintenanceMap.set(rec.vehicle_id, alerts);
       }
     }
 
-    // Monta visão unificada
-    return localVehicles.map((v) => {
+    return vehicles.map((v) => {
       const position = v.traccar_device_id
         ? (positionMap.get(v.traccar_device_id) ?? null)
         : null;
-
-      const vehicleMaintenances = v.fleetbase_asset_id
-        ? (maintenanceMap.get(v.fleetbase_asset_id) ?? [])
-        : [];
 
       return {
         id: v.id,
@@ -216,12 +223,8 @@ export class FleetBridgeService {
               updatedAt: position.deviceTime,
             }
           : null,
-        activeOrder: null, // TODO: cruzar com fleetbase_asset_id nas ordens
-        maintenanceAlerts: vehicleMaintenances.map((m) => ({
-          type: m.type,
-          description: m.description,
-          scheduledDate: m.scheduled_date,
-        })),
+        activeOrder: null,
+        maintenanceAlerts: maintenanceMap.get(v.id) ?? [],
       };
     });
   }
@@ -230,40 +233,49 @@ export class FleetBridgeService {
   // Obter resumo para o dashboard
   // ---------------------------------------------------------------------------
   async getDashboardSummary(): Promise<FleetDashboardSummary> {
-    const { fleetbase, fleetms } = await buildServices(this.tenantId);
+    const { fleetbase } = await buildOptionalServices(this.tenantId);
 
-    const [vehicles, orders, maintenances] = await Promise.allSettled([
-      withTenantSchema(
-        this.schemaName,
-        async (db) =>
-          db.$queryRaw<Array<{ status: string; count: string }>>`
-          SELECT status, COUNT(*)::text AS count FROM vehicles GROUP BY status
-        `,
-      ),
-      fleetbase
-        ? fleetbase.listOrders({ status: "in_transit" })
-        : Promise.resolve([]),
-      fleetms ? fleetms.listMaintenanceRecords() : Promise.resolve([]),
-    ]);
+    const [vehicleCounts, maintenanceCounts, orders] =
+      await Promise.allSettled([
+        withTenantSchema(
+          this.schemaName,
+          async (db) =>
+            db.$queryRaw<Array<{ status: string; count: string }>>`
+              SELECT status, COUNT(*)::text AS count
+              FROM vehicles
+              GROUP BY status
+            `,
+        ),
+        withTenantSchema(
+          this.schemaName,
+          async (db) =>
+            db.$queryRaw<[{ count: string }]>`
+              SELECT COUNT(*)::text AS count
+              FROM maintenance_records
+              WHERE status IN ('scheduled', 'in_progress')
+            `,
+        ),
+        fleetbase
+          ? fleetbase.listOrders({ status: "in_transit" })
+          : Promise.resolve([]),
+      ]);
 
-    const vehicleCounts = vehicles.status === "fulfilled" ? vehicles.value : [];
-    const total = vehicleCounts.reduce((s, r) => s + Number(r.count), 0);
-    const active = vehicleCounts.find((r) => r.status === "active")
-      ? Number(vehicleCounts.find((r) => r.status === "active")!.count)
-      : 0;
-    const maintenance = vehicleCounts.find((r) => r.status === "maintenance")
-      ? Number(vehicleCounts.find((r) => r.status === "maintenance")!.count)
-      : 0;
+    const counts =
+      vehicleCounts.status === "fulfilled" ? vehicleCounts.value : [];
+    const total = counts.reduce((s, r) => s + Number(r.count), 0);
+    const active =
+      Number(counts.find((r) => r.status === "active")?.count ?? 0);
+    const maintenance = Number(
+      counts.find((r) => r.status === "maintenance")?.count ?? 0,
+    );
+
+    const pendingMaintenances =
+      maintenanceCounts.status === "fulfilled"
+        ? Number(maintenanceCounts.value[0]?.count ?? 0)
+        : 0;
 
     const activeOrders =
       orders.status === "fulfilled" ? orders.value.length : 0;
-
-    const pendingMaintenances =
-      maintenances.status === "fulfilled"
-        ? maintenances.value.filter(
-            (m) => m.status === "scheduled" || m.status === "in_progress",
-          ).length
-        : 0;
 
     return {
       totalVehicles: total,

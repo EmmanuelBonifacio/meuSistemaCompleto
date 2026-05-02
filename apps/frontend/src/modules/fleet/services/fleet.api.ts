@@ -18,6 +18,7 @@ import api from "@/services/api";
 import type {
   FleetDashboardSummary,
   UnifiedVehicle,
+  UnifiedVehiclesResponse,
   Vehicle,
   Driver,
   MaintenanceRecord,
@@ -37,10 +38,8 @@ export async function getDashboard(): Promise<FleetDashboardSummary> {
 }
 
 /** Retorna veículos com dados combinados dos 3 engines (posição + ordens + alertas). */
-export async function getUnifiedVehicles(): Promise<
-  PaginatedResponse<UnifiedVehicle>
-> {
-  const response = await api.get<PaginatedResponse<UnifiedVehicle>>(
+export async function getUnifiedVehicles(): Promise<UnifiedVehiclesResponse> {
+  const response = await api.get<UnifiedVehiclesResponse>(
     "/fleet/vehicles/unified",
   );
   return response.data;
