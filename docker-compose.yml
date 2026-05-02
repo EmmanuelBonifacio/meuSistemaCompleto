@@ -1,11 +1,12 @@
 # =============================================================================
 # docker-compose.yml  (desenvolvimento)
 # =============================================================================
-# Sobe apenas PostgreSQL + pgAdmin para desenvolvimento local.
+# Sobe PostgreSQL + pgAdmin + engines do módulo Gestão de Frota para dev local.
 # O backend e o frontend rodam localmente com `npm run dev` (hot reload).
 #
 # Uso:
-#   docker compose up -d
+#   docker compose up -d                          → sobe tudo
+#   docker compose up traccar fleetbase fleetms -d → apenas as engines de frota
 #   cd apps/backend && npm run dev
 #   cd apps/frontend && npm run dev
 # =============================================================================
@@ -29,6 +30,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - saas_dev_net
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -42,6 +45,115 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - saas_dev_net
+
+  # ---------------------------------------------------------------------------
+  # ENGINE 1: Traccar — Rastreamento GPS em tempo real
+  # ---------------------------------------------------------------------------
+  # Responsabilidade: receber posições GPS dos veículos via protocolos nativos
+  #   e expor REST API para consulta de posições, histórico e alertas.
+  # Porta 8082: REST API (usada pelo backend Node.js)
+  # Porta 5055: receptor de protocolo GPS (OsmAnd, etc.)
+  # Config: ./docker/traccar/traccar.xml aponta para o mesmo postgres do projeto.
+  # ---------------------------------------------------------------------------
+  traccar:
+    image: traccar/traccar:latest
+    container_name: traccar_dev
+    restart: unless-stopped
+    ports:
+      - "8082:8082" # REST API
+      - "5055:5055" # Protocolo OsmAnd (GPS)
+    volumes:
+      - ./docker/traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      - traccar_dev_data:/opt/traccar/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8082 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - saas_dev_net
+
+  # ---------------------------------------------------------------------------
+  # ENGINE 2: Fleetbase — Despacho, motoristas e ordens de serviço
+  # ---------------------------------------------------------------------------
+  # Responsabilidade: gerenciar frotas, motoristas, ordens de despacho e rotas.
+  # Porta 4200: REST API (usada pelo backend Node.js via API Key por tenant)
+  # ---------------------------------------------------------------------------
+  fleetbase:
+    image: fleetbase/fleetbase:latest
+    container_name: fleetbase_dev
+    restart: unless-stopped
+    ports:
+      - "4200:8000" # API HTTP interna (8000) exposta na 4200
+    volumes:
+      - fleetbase_dev_data:/var/www/fleetbase/storage
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:4200
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${FLEETBASE_DB:-fleetbase_dev}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - saas_dev_net
+
+  # ---------------------------------------------------------------------------
+  # ENGINE 3: Fleetms — Manutenção de veículos, documentos e combustível
+  # ---------------------------------------------------------------------------
+  # Responsabilidade: controlar manutenções preventivas/corretivas, documentos
+  #   de veículos (CRLV, seguro) e abastecimentos.
+  # Porta 4000: REST API (usada pelo backend Node.js via Bearer token por tenant)
+  # ---------------------------------------------------------------------------
+  fleetms:
+    image: ghcr.io/jmnda-dev/fleetms:latest
+    container_name: fleetms_dev
+    restart: unless-stopped
+    ports:
+      - "4000:3000" # Porta interna 3000 exposta na 4000
+    volumes:
+      - fleetms_dev_data:/app/data
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${FLEETMS_DB:-fleetms_dev}
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -q --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - saas_dev_net
+
+networks:
+  saas_dev_net:
+    driver: bridge
 
 volumes:
   postgres_dev_data:
+  traccar_dev_data:
+  fleetbase_dev_data:
+  fleetms_dev_data:

@@ -36,10 +36,15 @@ import {
   DollarSign,
   Tv,
   ShoppingCart,
+  Truck,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   LogOut,
   Settings,
+  Users,
+  FileText,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -53,10 +58,17 @@ import type { Module } from "@/types/api";
 // Para adicionar novo módulo: adicionar entrada aqui + criar pasta em /src/modules/
 // Em NENHUM outro lugar precisa mudar para o link aparecer no menu!
 // =============================================================================
+interface ModuleChild {
+  icon: LucideIcon;
+  label: string;
+  path: string;
+}
+
 interface ModuleConfig {
   icon: LucideIcon;
   label: string;
   path: string;
+  children?: ModuleChild[];
 }
 
 const MODULE_CONFIG: Record<string, ModuleConfig> = {
@@ -80,6 +92,17 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
     label: "Vendas",
     path: "vendas/admin",
   },
+  fleet: {
+    icon: Truck,
+    label: "Gestão de Frota",
+    path: "frota",
+    children: [
+      { icon: Truck, label: "Veículos", path: "frota/veiculos" },
+      { icon: Users, label: "Motoristas", path: "frota/motoristas" },
+      { icon: FileText, label: "Despacho", path: "frota/despacho" },
+      { icon: Wrench, label: "Manutenção", path: "frota/manutencao" },
+    ],
+  },
 };
 
 // =============================================================================
@@ -100,6 +123,7 @@ interface NavItemProps {
   label: string;
   isActive: boolean;
   isCollapsed: boolean;
+  indent?: boolean;
 }
 
 function SidebarNavItem({
@@ -108,26 +132,94 @@ function SidebarNavItem({
   label,
   isActive,
   isCollapsed,
+  indent = false,
 }: NavItemProps) {
   return (
     <Link
       href={href}
-      title={isCollapsed ? label : undefined} // Tooltip quando minimizado
+      title={isCollapsed ? label : undefined}
       className={cn(
-        // Layout base
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150",
-        // Estado padrão
         "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-        // Estado ativo (página atual)
         isActive && "bg-sidebar-accent text-sidebar-foreground font-medium",
-        // Modo minimizado: centraliza o ícone
         isCollapsed && "justify-center px-2",
+        indent && !isCollapsed && "pl-8",
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {/* Hide text when collapsed */}
       {!isCollapsed && <span className="truncate">{label}</span>}
     </Link>
+  );
+}
+
+// =============================================================================
+// COMPONENTE: SidebarNavGroup (item com sublinks expansíveis)
+// =============================================================================
+interface NavGroupProps {
+  tenantBase: string;
+  config: ModuleConfig;
+  isActive: (path: string) => boolean;
+  isCollapsed: boolean;
+}
+
+function SidebarNavGroup({
+  tenantBase,
+  config,
+  isActive,
+  isCollapsed,
+}: NavGroupProps) {
+  const anyChildActive =
+    config.children?.some((c) => isActive(c.path)) ?? false;
+  const [open, setOpen] = useState(anyChildActive);
+
+  if (isCollapsed) {
+    return (
+      <SidebarNavItem
+        href={`${tenantBase}/${config.path}`}
+        icon={config.icon}
+        label={config.label}
+        isActive={isActive(config.path)}
+        isCollapsed={isCollapsed}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150",
+          "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
+          (isActive(config.path) || anyChildActive) &&
+            "text-sidebar-foreground font-medium",
+        )}
+      >
+        <config.icon className="h-4 w-4 shrink-0" />
+        <span className="flex-1 truncate text-left">{config.label}</span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5">
+          {config.children?.map((child) => (
+            <SidebarNavItem
+              key={child.path}
+              href={`${tenantBase}/${child.path}`}
+              icon={child.icon}
+              label={child.label}
+              isActive={isActive(child.path)}
+              isCollapsed={false}
+              indent
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -229,12 +321,20 @@ export function Sidebar({
           </div>
         ) : (
           modules.map((module) => {
-            // Busca a configuração visual do módulo pelo nome (ex: "estoque")
             const config = MODULE_CONFIG[module.name];
-
-            // Se o módulo não tem configuração visual, não renderiza.
-            // Isso previne erros se o Backend adicionar módulos desconhecidos.
             if (!config) return null;
+
+            if (config.children?.length) {
+              return (
+                <SidebarNavGroup
+                  key={module.name}
+                  tenantBase={tenantBase}
+                  config={config}
+                  isActive={isActive}
+                  isCollapsed={isCollapsed}
+                />
+              );
+            }
 
             return (
               <SidebarNavItem

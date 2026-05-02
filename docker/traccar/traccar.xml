@@ -1,0 +1,54 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  traccar.xml — Configuração do servidor Traccar (desenvolvimento local)
+  =========================================================================
+  Aponta para o mesmo PostgreSQL já usado pelo projeto SaaS.
+  O Traccar criará suas próprias tabelas no schema 'public' do banco
+  'traccar_dev' (banco separado para isolamento — ver POSTGRES_DB no .env).
+
+  Referência: https://www.traccar.org/configuration-file/
+  =========================================================================
+-->
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+<properties>
+
+  <!-- =======================================================================
+       BANCO DE DADOS — PostgreSQL (mesmo host do projeto)
+       O Traccar usa JDBC. O container 'postgres' é acessível via hostname
+       'postgres' dentro da rede Docker 'saas_dev_net'.
+       ======================================================================= -->
+  <entry key='database.driver'>org.postgresql.Driver</entry>
+  <entry key='database.url'>jdbc:postgresql://postgres:5432/traccar_dev</entry>
+  <entry key='database.user'>postgres</entry>
+  <entry key='database.password'>postgres</entry>
+
+  <!-- =======================================================================
+       SERVIDOR REST API
+       Porta 8082: usada pelo backend Node.js para consultar posições.
+       ======================================================================= -->
+  <entry key='web.enable'>true</entry>
+  <entry key='web.port'>8082</entry>
+  <entry key='web.path'>/opt/traccar/web</entry>
+
+  <!-- =======================================================================
+       PROTOCOLO GPS: OsmAnd (porta 5055)
+       Aplicativos móveis como OsmAnd e GPSLogger enviam posições aqui.
+       Usado para teste com smartphone durante desenvolvimento.
+       ======================================================================= -->
+  <entry key='osmand.port'>5055</entry>
+
+  <!-- =======================================================================
+       LOGS
+       Nível 'info' recomendado para desenvolvimento.
+       Em produção, usar 'warning' para reduzir volume.
+       ======================================================================= -->
+  <entry key='logger.level'>info</entry>
+  <entry key='logger.file'>/opt/traccar/logs/tracker-server.log</entry>
+
+  <!-- =======================================================================
+       TIMEZONE
+       Datas e horas retornadas pela API seguem este timezone.
+       ======================================================================= -->
+  <entry key='time.zone'>America/Sao_Paulo</entry>
+
+</properties>

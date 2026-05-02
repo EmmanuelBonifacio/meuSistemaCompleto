@@ -342,7 +342,7 @@ export async function toggleModuleHandler(
         statusCode: 404,
         error: "Não Encontrado",
         message: error.message,
-        dica: "Módulos disponíveis: estoque, financeiro, vendas, rh",
+        dica: "Módulos disponíveis: estoque, financeiro, vendas, tv, fleet",
       });
     }
     throw error;

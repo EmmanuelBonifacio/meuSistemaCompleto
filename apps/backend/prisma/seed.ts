@@ -47,7 +47,8 @@ async function main() {
     {
       name: "vendas",
       displayName: "VendasWhats",
-      description: "Catálogo de vendas público com checkout direto via WhatsApp.",
+      description:
+        "Catálogo de vendas público com checkout direto via WhatsApp.",
     },
     {
       name: "rh",
@@ -60,6 +61,12 @@ async function main() {
       displayName: "Controle de Telas",
       description:
         "Digital Signage: gerenciar Smart TVs e monitores da rede, enviar conteúdo via UPnP/DIAL.",
+    },
+    {
+      name: "fleet",
+      displayName: "Gestão de Frota",
+      description:
+        "Rastreamento GPS em tempo real, despacho de motoristas e controle de manutenção de veículos.",
     },
   ];
 

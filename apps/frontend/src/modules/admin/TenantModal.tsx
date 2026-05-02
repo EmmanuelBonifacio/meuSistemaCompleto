@@ -13,6 +13,7 @@ import {
   Users,
   ShoppingCart,
   Tv,
+  Truck,
   Activity,
   Plus,
   KeyRound,
@@ -52,6 +53,8 @@ function ModuleIcon({ name }: { name: string }) {
       return <Users className={cls} />;
     case "vendas":
       return <ShoppingCart className={cls} />;
+    case "fleet":
+      return <Truck className={cls} />;
     default:
       return <Monitor className={cls} />;
   }

@@ -32,6 +32,7 @@ import { adminAuthRoutes } from "./admin/admin.auth.routes";
 import { tvRoutes } from "./modules/tv/tv.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { vendasRoutes } from "./modules/vendas/vendas.routes";
+import { fleetRoutes } from "./modules/fleet";
 import { registerRequestLoggerHook } from "./core/middleware/request-logger.hook";
 import { xiboRoutes } from "./routes/xibo/xibo.routes";
 
@@ -363,6 +364,9 @@ async function buildServer() {
 
   // Módulo SalesWpp — Catálogo de Vendas com Checkout via WhatsApp
   await app.register(vendasRoutes, { prefix: "/vendas" });
+
+  // Módulo Gestão de Frota — Rastreamento, Despacho e Manutenção
+  await app.register(fleetRoutes, { prefix: "/fleet" });
 
   // API Xibo (DataSet remoto — auth por ?token=, sem JWT de usuário)
   await app.register(xiboRoutes, { prefix: "/api/v1/xibo" });

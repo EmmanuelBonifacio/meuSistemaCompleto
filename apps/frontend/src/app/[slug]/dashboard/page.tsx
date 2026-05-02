@@ -18,6 +18,7 @@ import {
   TrendingUp,
   ShoppingCart,
   LayoutGrid,
+  Truck,
   ArrowRight,
   LayoutDashboard,
 } from "lucide-react";
@@ -73,6 +74,15 @@ const MODULE_CARDS = {
     color: "text-green-700",
     bg: "bg-green-100",
     href: "vendas/admin",
+  },
+  fleet: {
+    icon: Truck,
+    title: "Gestão de Frota",
+    description:
+      "Rastreamento GPS em tempo real, despacho e manutenção da frota.",
+    color: "text-indigo-600",
+    bg: "bg-indigo-50",
+    href: "frota",
   },
 };
 
@@ -142,7 +152,13 @@ export default function DashboardPage() {
             const meta = MODULE_CARDS[modName as keyof typeof MODULE_CARDS];
             if (!meta) return [];
 
-            const cards = [{ key: modName, meta, href: `/${slug}/${modName}` }];
+            const cards = [
+              {
+                key: modName,
+                meta,
+                href: `/${slug}/${"href" in meta && meta.href ? meta.href : modName}`,
+              },
+            ];
 
             // Para o módulo vendas, adiciona card extra para o painel admin
             if (modName === "vendas") {

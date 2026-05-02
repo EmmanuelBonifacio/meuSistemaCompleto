@@ -57,6 +57,12 @@ const ALL_MODULES: Module[] = [
     displayName: "VendasWhats",
     description: "Catálogo de vendas com checkout via WhatsApp",
   },
+  {
+    id: "fleet",
+    name: "fleet",
+    displayName: "Gestão de Frota",
+    description: "Rastreamento GPS, despacho e manutenção de veículos",
+  },
 ];
 
 // =============================================================================

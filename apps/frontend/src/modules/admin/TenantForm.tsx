@@ -30,7 +30,15 @@ interface TenantFormProps {
 }
 
 // Módulos disponíveis para seleção ao criar o tenant
-const AVAILABLE_MODULES = ["tv", "estoque", "financeiro", "vendas"];
+const AVAILABLE_MODULES = ["tv", "estoque", "financeiro", "vendas", "fleet"];
+
+const MODULE_LABELS: Record<string, string> = {
+  tv: "TV Digital",
+  estoque: "Estoque",
+  financeiro: "Financeiro",
+  vendas: "Vendas",
+  fleet: "Gestão de Frota",
+};
 
 export function TenantForm({ isOpen, onClose, onSuccess }: TenantFormProps) {
   const [name, setName] = useState("");
@@ -195,7 +203,7 @@ export function TenantForm({ isOpen, onClose, onSuccess }: TenantFormProps) {
                         : "border-border bg-background text-muted-foreground hover:bg-muted"
                     }`}
                   >
-                    {mod}
+                    {MODULE_LABELS[mod] ?? mod}
                   </button>
                 );
               })}
