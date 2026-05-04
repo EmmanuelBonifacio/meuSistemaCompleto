@@ -1,0 +1,35 @@
+# =============================================================================
+# VROOM (vroomvrp/vroom-docker)
+# =============================================================================
+# O backend Node NÃO usa este router OSRM: ele envia matrizes durations/distances
+# vindas do GraphHopper (ver apps/backend vroom.service.ts). Manter os blocos
+# abaixo não prejudica; host 0.0.0.0 como destino de conexão do VROOM falha
+# (por isso não use options.g no JSON sem OSRM real).
+# =============================================================================
+cliArgs:
+  geometry: false
+  planmode: false
+  threads: 4
+  explore: 5
+  limit: '1mb'
+  logdir: '/..'
+  logsize: '100M'
+  maxlocations: 1000
+  maxvehicles: 200
+  override: true
+  path: ''
+  port: 3000
+  router: 'osrm'
+  timeout: 300000
+  baseurl: '/'
+routingServers:
+  osrm:
+    car:
+      host: '0.0.0.0'
+      port: '5000'
+    bike:
+      host: '0.0.0.0'
+      port: '5001'
+    foot:
+      host: '0.0.0.0'
+      port: '5002'

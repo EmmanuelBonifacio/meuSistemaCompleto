@@ -33,6 +33,7 @@ import { tvRoutes } from "./modules/tv/tv.routes";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { vendasRoutes } from "./modules/vendas/vendas.routes";
 import { fleetRoutes } from "./modules/fleet";
+import { routesModule } from "./modules/routes/routes.routes";
 import { registerRequestLoggerHook } from "./core/middleware/request-logger.hook";
 import { xiboRoutes } from "./routes/xibo/xibo.routes";
 
@@ -367,6 +368,22 @@ async function buildServer() {
 
   // Módulo Gestão de Frota — Rastreamento, Despacho e Manutenção
   await app.register(fleetRoutes, { prefix: "/fleet" });
+
+  // Módulo Criar Rotas — mesmo handler em dois prefixos.
+  // Importante: cada registro usa uma função plugin nova — evita deduplicação
+  // do Fastify ao reutilizar a mesma referência de função.
+  await app.register(
+    async (f) => {
+      await routesModule(f);
+    },
+    { prefix: "/api/v1/routes" },
+  );
+  await app.register(
+    async (f) => {
+      await routesModule(f);
+    },
+    { prefix: "/routes" },
+  );
 
   // API Xibo (DataSet remoto — auth por ?token=, sem JWT de usuário)
   await app.register(xiboRoutes, { prefix: "/api/v1/xibo" });

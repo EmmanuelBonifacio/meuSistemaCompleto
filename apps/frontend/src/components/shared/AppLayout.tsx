@@ -22,6 +22,7 @@
 // =============================================================================
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { useModules } from "@/hooks/useModules";
 import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
@@ -45,6 +46,9 @@ export function AppLayout({
 
   // Descoberta dinâmica dos módulos ativos (o "Lego" em ação)
   const { modules, isLoading: isLoadingModules } = useModules();
+  const pathname = usePathname() ?? "";
+  // Página full-bleed: flex em altura + sem container limitado (Leaflet + painéis laterais)
+  const isCriarRotasFullBleed = /\/frota\/criar-rotas(?:\/|$)/.test(pathname);
 
   return (
     // Container principal: flex horizontal (sidebar | conteúdo)
@@ -95,10 +99,21 @@ export function AppLayout({
         />
 
         {/* Área de conteúdo das páginas */}
-        <main className="flex-1 overflow-y-auto bg-background">
-          <div className="container mx-auto p-4 md:p-6 max-w-7xl">
-            {children}
-          </div>
+        <main
+          className={cn(
+            "flex-1 bg-background",
+            isCriarRotasFullBleed
+              ? "flex min-h-0 flex-col overflow-hidden p-0"
+              : "overflow-y-auto",
+          )}
+        >
+          {isCriarRotasFullBleed ? (
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          ) : (
+            <div className="container mx-auto max-w-7xl p-4 md:p-6">
+              {children}
+            </div>
+          )}
         </main>
       </div>
     </div>

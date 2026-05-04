@@ -45,6 +45,7 @@ import {
   Users,
   FileText,
   Wrench,
+  Route,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -99,6 +100,7 @@ const MODULE_CONFIG: Record<string, ModuleConfig> = {
     children: [
       { icon: Truck, label: "Veículos", path: "frota/veiculos" },
       { icon: Users, label: "Motoristas", path: "frota/motoristas" },
+      { icon: Route, label: "Criar Rotas", path: "frota/criar-rotas" },
       { icon: FileText, label: "Despacho", path: "frota/despacho" },
       { icon: Wrench, label: "Manutenção", path: "frota/manutencao" },
     ],

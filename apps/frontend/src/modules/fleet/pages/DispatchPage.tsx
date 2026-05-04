@@ -28,6 +28,9 @@ import {
   RefreshCw,
   X,
   GripVertical,
+  Route,
+  Map,
+  LayoutList,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,6 +41,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { listDrivers, listVehicles } from "../services/fleet.api";
+import { getPendingDispatchCount, listTodayRoutes } from "../services/routes.api";
+import type { Route as RouteType } from "../types/routes.types";
 import type {
   Driver,
   Vehicle,
@@ -58,6 +63,10 @@ interface UiToast {
 interface LocalOrder extends DispatchOrder {
   _driverName?: string;
   _vehiclePlate?: string;
+  _routeName?: string;
+  _routeColor?: string;
+  /** Preenchido quando a ordem vem de rota otimizada (filtro kanban) */
+  route_id?: string | null;
 }
 
 // =============================================================================
@@ -152,11 +161,21 @@ function OrderCard({
         <span className="text-xs text-gray-400 font-mono">
           #{order.id.slice(0, 8)}
         </span>
-        <span
-          className={`text-xs px-2 py-0.5 rounded-full font-medium ${pri.cls}`}
-        >
-          {pri.label}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {order._routeName && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full font-medium text-white"
+              style={{ backgroundColor: order._routeColor ?? "#185FA5" }}
+            >
+              {order._routeName}
+            </span>
+          )}
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${pri.cls}`}
+          >
+            {pri.label}
+          </span>
+        </div>
       </div>
       <div className="space-y-1 text-sm text-gray-700 mb-2">
         <p className="flex items-start gap-1.5">
@@ -271,6 +290,10 @@ export function DispatchPage() {
 
   const [filterDriver, setFilterDriver] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
+  const [filterRoute, setFilterRoute] = useState("");
+  const [activeTab, setActiveTab] = useState<"kanban" | "routes" | "map">("kanban");
+  const [pendingRouteCount, setPendingRouteCount] = useState(0);
+  const [todayRoutes, setTodayRoutes] = useState<RouteType[]>([]);
 
   const [toast, setToast] = useState<UiToast | null>(null);
 
@@ -291,6 +314,10 @@ export function DispatchPage() {
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
+
+    // Fetch route integration data
+    getPendingDispatchCount().then(setPendingRouteCount).catch(() => {});
+    listTodayRoutes().then((res) => setTodayRoutes(res.data)).catch(() => {});
   }, []);
 
   const sensors = useSensors(
@@ -360,6 +387,8 @@ export function DispatchPage() {
   const filteredOrders = orders.filter((o) => {
     if (filterDriver && o.driver_id !== filterDriver) return false;
     if (filterPriority && o.priority !== filterPriority) return false;
+    if (filterRoute === "with_route" && !o.route_id) return false;
+    if (filterRoute === "no_route" && o.route_id) return false;
     return true;
   });
 
@@ -367,7 +396,23 @@ export function DispatchPage() {
   const availableVehicles = vehicles;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Banner: rotas aguardando despacho */}
+      {pendingRouteCount > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-[#E6F1FB] border border-[#185FA5]/20 rounded-lg">
+          <Route className="w-4 h-4 text-[#185FA5] flex-shrink-0" />
+          <p className="text-sm text-[#185FA5] font-medium">
+            {pendingRouteCount} rota{pendingRouteCount > 1 ? "s" : ""} otimizada{pendingRouteCount > 1 ? "s" : ""} aguardam despacho
+          </p>
+          <a
+            href="../frota/criar-rotas"
+            className="ml-auto text-xs text-[#185FA5] underline hover:no-underline"
+          >
+            Ver em Criar Rotas →
+          </a>
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>
@@ -388,6 +433,96 @@ export function DispatchPage() {
           Nova Ordem
         </button>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {[
+          { id: "kanban" as const, label: "Kanban", icon: <LayoutList className="w-3.5 h-3.5" /> },
+          { id: "routes" as const, label: "Rotas do dia", icon: <Route className="w-3.5 h-3.5" /> },
+          { id: "map" as const, label: "Mapa ao vivo", icon: <Map className="w-3.5 h-3.5" /> },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.id
+                ? "border-[#185FA5] text-[#185FA5]"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.id === "routes" && todayRoutes.length > 0 && (
+              <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-[#185FA5] text-white">
+                {todayRoutes.length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Rotas do dia */}
+      {activeTab === "routes" && (
+        <div className="space-y-3">
+          {todayRoutes.length === 0 ? (
+            <div className="text-center py-12">
+              <Route className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+              <p className="text-sm text-gray-400">Nenhuma rota criada hoje.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Use <strong>Criar Rotas</strong> para otimizar e aprovar rotas.
+              </p>
+            </div>
+          ) : (
+            todayRoutes.map((route) => (
+              <div
+                key={route.id}
+                className="flex items-center gap-3 p-3 bg-white border rounded-lg"
+                style={{ borderLeftWidth: "3px", borderLeftColor: route.color }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: route.color }}
+                >
+                  {route.name.replace("Rota ", "")}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{route.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {route.stops.length} paradas · {route.totalDistanceKm.toFixed(1)} km · {route.estimatedDurationMin} min
+                  </p>
+                </div>
+                <span
+                  className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    route.status === "approved" ? "bg-green-100 text-green-700" :
+                    route.status === "dispatched" ? "bg-blue-100 text-blue-700" :
+                    route.status === "completed" ? "bg-purple-100 text-purple-700" :
+                    "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {route.status === "approved" ? "Aprovada" :
+                   route.status === "dispatched" ? "Despachada" :
+                   route.status === "completed" ? "Concluída" : "Pendente"}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Tab: Mapa ao vivo */}
+      {activeTab === "map" && (
+        <div className="flex flex-col items-center justify-center py-16 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+          <Map className="w-12 h-12 text-gray-200 mb-3" />
+          <p className="text-sm font-medium text-gray-500">Mapa ao vivo</p>
+          <p className="text-xs text-gray-400 mt-1 text-center max-w-xs">
+            Rastreamento em tempo real das paradas de hoje.
+            Disponível na próxima fase com integração ao Traccar.
+          </p>
+        </div>
+      )}
+
+      {/* Tab: Kanban (default) */}
+      {activeTab === "kanban" && <>
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">
@@ -414,11 +549,21 @@ export function DispatchPage() {
           <option value="medium">Normal</option>
           <option value="low">Baixa</option>
         </select>
-        {(filterDriver || filterPriority) && (
+        <select
+          value={filterRoute}
+          onChange={(e) => setFilterRoute(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Todas as rotas</option>
+          <option value="with_route">Com rota vinculada</option>
+          <option value="no_route">Sem rota</option>
+        </select>
+        {(filterDriver || filterPriority || filterRoute) && (
           <button
             onClick={() => {
               setFilterDriver("");
               setFilterPriority("");
+              setFilterRoute("");
             }}
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500"
           >
@@ -427,7 +572,7 @@ export function DispatchPage() {
         )}
         <span className="ml-auto text-xs text-gray-400">
           {filteredOrders.length} ordem{filteredOrders.length !== 1 ? "s" : ""}
-          {filterDriver || filterPriority
+          {(filterDriver || filterPriority || filterRoute)
             ? " (filtrada" + (filteredOrders.length !== 1 ? "s" : "") + ")"
             : ""}
         </span>
@@ -488,6 +633,8 @@ export function DispatchPage() {
           </button>
         </div>
       )}
+
+      </> /* end kanban tab */}
 
       {/* Modal Nova Ordem */}
       <Dialog

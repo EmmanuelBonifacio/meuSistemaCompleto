@@ -1,0 +1,30 @@
+graphhopper:
+  datareader.file: /data/minas-gerais-latest.osm.pbf
+  graph.location: /data/graph-cache
+  profiles:
+    - name: car
+      vehicle: car
+      weighting: fastest
+    - name: motorcycle
+      vehicle: motorcycle
+      weighting: fastest
+    - name: bike
+      vehicle: bike
+      weighting: fastest
+  profiles_ch:
+    - profile: car
+    - profile: motorcycle
+
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+  request_log:
+    appenders: []
+
+logging:
+  level: WARN
+  appenders:
+    - type: console
+      threshold: WARN

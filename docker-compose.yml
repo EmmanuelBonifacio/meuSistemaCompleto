@@ -148,6 +148,51 @@ services:
     networks:
       - saas_dev_net
 
+  # ---------------------------------------------------------------------------
+  # ENGINE 4: GraphHopper — Roteamento e matriz de distâncias via OpenStreetMap
+  # ---------------------------------------------------------------------------
+  # Responsabilidade: calcular rotas, matrizes de tempo/distância e geocodificação
+  #   a partir de dados OSM locais (sem chave de API, sem custo).
+  # Porta 8989: REST API (usada pelo backend Node.js via GRAPHHOPPER_URL)
+  #
+  # PRÉ-REQUISITO: baixar o mapa OSM uma vez antes de subir:
+  #   bash scripts/download-osm.sh
+  # ---------------------------------------------------------------------------
+  graphhopper:
+    image: israelhikingmap/graphhopper:latest
+    container_name: graphhopper_dev
+    restart: unless-stopped
+    volumes:
+      - ./docker/graphhopper/data:/data
+    command: ["--input", "/data/minas-gerais-latest.osm.pbf", "--host", "0.0.0.0", "--graph-cache", "/data/graph-cache"]
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms512m
+    ports:
+      - "8989:8989"
+    networks:
+      - saas_dev_net
+
+  # ---------------------------------------------------------------------------
+  # ENGINE 5: VROOM — Motor de otimização de rotas (VRP)
+  # ---------------------------------------------------------------------------
+  # Responsabilidade: resolver o Vehicle Routing Problem recebendo a matriz de
+  #   distâncias pré-calculada pelo GraphHopper (nosso backend Node.js faz isso).
+  #   O VROOM não precisa chamar o GraphHopper diretamente — recebe a matriz.
+  # Porta 3002 (host) → 3000 (container)
+  # ---------------------------------------------------------------------------
+  vroom:
+    image: vroomvrp/vroom-docker:v1.13.0
+    container_name: vroom_dev
+    restart: unless-stopped
+    volumes:
+      - ./docker/vroom:/conf
+    ports:
+      - "3002:3000"
+    depends_on:
+      - graphhopper
+    networks:
+      - saas_dev_net
+
 networks:
   saas_dev_net:
     driver: bridge
