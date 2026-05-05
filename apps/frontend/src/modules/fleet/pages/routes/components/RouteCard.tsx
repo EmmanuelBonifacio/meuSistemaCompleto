@@ -63,11 +63,11 @@ export function RouteCard({
             </span>
             <span className="flex items-center gap-1">
               <Ruler className="w-3 h-3" />
-              {route.totalDistanceKm.toFixed(1)} km
+              {(route.totalDistanceKm ?? 0).toFixed(1)} km
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
-              {route.estimatedDurationMin} min
+              {route.estimatedDurationMin ?? 0} min
             </span>
           </div>
         </div>

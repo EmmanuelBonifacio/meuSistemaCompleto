@@ -488,7 +488,7 @@ export function DispatchPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800">{route.name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {route.stops.length} paradas · {route.totalDistanceKm.toFixed(1)} km · {route.estimatedDurationMin} min
+                    {route.stops.length} paradas · {(route.totalDistanceKm ?? 0).toFixed(1)} km · {route.estimatedDurationMin ?? 0} min
                   </p>
                 </div>
                 <span

@@ -108,8 +108,8 @@ export interface Route {
   name: string;
   vehicleId: string | null;
   driverId: string | null;
-  totalDistanceKm: number;
-  estimatedDurationMin: number;
+  totalDistanceKm: number | null;
+  estimatedDurationMin: number | null;
   status: RouteStatus;
   color: string;
   stops: RouteStop[];
